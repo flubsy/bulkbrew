@@ -1,6 +1,7 @@
 "use client";
 
 import { db } from "./db";
+import { packCollection, postJson } from "./payload";
 import type { BuildOptions, BuiltDeck } from "./types";
 
 export const BUILD_OPTIONS_KEY = "deckbit.buildOptions";
@@ -10,13 +11,7 @@ export async function runBuild(options: BuildOptions): Promise<{ deck: BuiltDeck
   const owned = (await db.owned.toArray()).filter((c) => c.card);
   if (!owned.length) throw new Error("Import your collection first.");
   const refs = (await db.refDecks.toArray()).filter((r) => options.referenceDeckIds.includes(r.id));
-  const res = await fetch("/api/build", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ options, owned: owned.map((c) => ({ card: c.card, quantity: c.quantity })), refs }),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+  const json = await postJson<{ deck: BuiltDeck; aiAvailable: boolean }>("/api/build", { options, owned: packCollection(owned, options.format), refs });
   const deck: BuiltDeck = json.deck;
   await db.builds.put(deck);
   return { deck, aiAvailable: json.aiAvailable };

@@ -1,3 +1,5 @@
+import { readJson } from "@/lib/read-body";
+import { withImages } from "@/lib/scryfall";
 import { buildPool } from "@/lib/builder/heuristic";
 import { buildPrimer } from "@/lib/builder/primer";
 import { comboSuggestions, upgradeDeck, type UpgradeOptions } from "@/lib/builder/upgrade";
@@ -11,7 +13,7 @@ export const maxDuration = 120;
 interface UpgradeRequest {
   deck: ReferenceDeck;
   commanders?: string[]; // overrides deck.commanders when the list didn't mark them
-  owned: { card: CardData; quantity: number }[];
+  owned: { card: CardData; quantity: number; sets?: string[] }[];
   build: BuildOptions;
   upgrade: UpgradeOptions;
   /** Just explain the list (primer + combos), no swaps. Works without a collection. */
@@ -47,7 +49,7 @@ async function resolve(names: string[]): Promise<{ found: Map<string, CardData>;
 export async function POST(req: Request) {
   let body: UpgradeRequest;
   try {
-    body = await req.json();
+    body = await readJson(req);
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
@@ -113,5 +115,5 @@ export async function POST(req: Request) {
     result.name = body.deck.name;
     result.notes = result.notes.filter((n) => !n.startsWith("Compared") && !n.startsWith("Stopped"));
   }
-  return Response.json({ deck: result });
+  return Response.json({ deck: withImages(result) });
 }

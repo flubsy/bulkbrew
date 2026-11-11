@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { creatureTypes } from "@/lib/builder/classify";
 import type { UpgradeOptions } from "@/lib/builder/upgrade";
 import { db } from "@/lib/db";
+import { packCollection, postJson } from "@/lib/payload";
 import { mapEdhrecTag } from "@/lib/tags";
 import { BRACKETS, type BuildOptions, type BuiltDeck, type EdhrecTag, type ReferenceDeck } from "@/lib/types";
 import { CardPreviewProvider } from "./card-preview";
@@ -130,19 +131,13 @@ function Inner() {
         mustOwnEverything: true,
       };
       const upgrade: UpgradeOptions = { maxSwaps, minGain, protect: protect.split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean), allowLandSwaps: allowLands };
-      const res = await fetch("/api/upgrade", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deck, commanders, owned: explainOnly ? [] : enriched.map((c) => ({ card: c.card, quantity: c.quantity })), build, upgrade, explainOnly }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const json = await postJson<{ deck?: BuiltDeck; needCommander?: string[] }>("/api/upgrade", { deck, commanders, owned: explainOnly ? [] : packCollection(enriched, "commander"), build, upgrade, explainOnly });
       if (json.needCommander) {
         setNeedCommander(json.needCommander);
         setError(json.needCommander.length ? "This list doesn't mark a commander. Pick it below and run again." : "No legendary creature found in this list to use as commander.");
         return;
       }
-      const d: BuiltDeck = json.deck;
+      const d = json.deck as BuiltDeck;
       setResult(d);
       if (!explainOnly) await db.builds.put(d);
     } catch (e) {

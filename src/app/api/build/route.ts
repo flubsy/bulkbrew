@@ -1,3 +1,5 @@
+import { readJson } from "@/lib/read-body";
+import { withImages } from "@/lib/scryfall";
 import { aiAvailable, refineWithAI } from "@/lib/builder/ai";
 import { buildHeuristic, buildPool, scorePool } from "@/lib/builder/heuristic";
 import { buildPrimer } from "@/lib/builder/primer";
@@ -9,7 +11,7 @@ export const maxDuration = 300;
 
 interface BuildRequest {
   options: BuildOptions;
-  owned: { card: CardData; quantity: number }[];
+  owned: { card: CardData; quantity: number; sets?: string[] }[];
   refs: ReferenceDeck[];
 }
 
@@ -17,7 +19,7 @@ interface BuildRequest {
 export async function POST(req: Request) {
   let body: BuildRequest;
   try {
-    body = await req.json();
+    body = await readJson(req);
   } catch {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
@@ -57,5 +59,5 @@ export async function POST(req: Request) {
   }
 
   deck.primer = buildPrimer(deck, cmdCards.filter((c): c is NonNullable<typeof c> => !!c), ed.tagLabel);
-  return Response.json({ deck, aiAvailable: aiAvailable() });
+  return Response.json({ deck: withImages(deck), aiAvailable: aiAvailable() });
 }

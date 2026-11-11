@@ -65,7 +65,7 @@ export function formatMeta(f: BuildOptions["format"]) {
 }
 
 /** Collapse owned printings into one pool entry per card name. */
-export function buildPool(owned: { card?: CardData; quantity: number; setCode?: string }[]): PoolCard[] {
+export function buildPool(owned: { card?: CardData; quantity: number; sets?: string[] }[]): PoolCard[] {
   const map = new Map<string, PoolCard>();
   for (const o of owned) {
     if (!o.card) continue;
@@ -75,9 +75,9 @@ export function buildPool(owned: { card?: CardData; quantity: number; setCode?: 
     if (p) {
       p.owned += o.quantity;
       if (price !== null && (p.priceUsd === null || price < p.priceUsd)) p.priceUsd = price;
-      if (o.card.setCode && !p.sets.includes(o.card.setCode)) p.sets.push(o.card.setCode);
+      for (const s of o.sets ?? [o.card.setCode]) if (s && !p.sets.includes(s)) p.sets.push(s);
     } else {
-      map.set(key, { card: o.card, owned: o.quantity, priceUsd: price, sets: o.card.setCode ? [o.card.setCode] : [] });
+      map.set(key, { card: o.card, owned: o.quantity, priceUsd: price, sets: (o.sets ?? [o.card.setCode]).filter(Boolean) });
     }
   }
   return [...map.values()];
