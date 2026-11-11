@@ -39,7 +39,20 @@ Code: `src/lib/db.ts` (change tracking), `src/lib/sync.ts` (push/pull), `src/com
 
 Callback URL for every provider below: `https://<your-project-ref>.supabase.co/auth/v1/callback`. It's shown on each provider's page in Supabase.
 
-**Email link** is on by default. Supabase's built-in mailer only sends a few emails an hour. That's fine for you and some friends; for more, plug in a free SMTP service like Resend under Authentication → Emails.
+**Email (password, or a 6-digit code)** is on by default. Two settings make it work smoothly:
+
+1. **Show the code in the emails.** Supabase's default emails only contain a link. Links are single-use and tied to the browser that asked for them, so they fail when a mail app pre-opens them or you open them on another device (you'd see "access denied" / "link expired"). Under **Authentication → Emails → Templates**, edit both **Confirm signup** and **Magic Link** and add the code above the link:
+
+   ```html
+   <h2>Your BulkBrew code</h2>
+   <p style="font-size:28px;letter-spacing:4px"><b>{{ .Token }}</b></p>
+   <p>Type it into BulkBrew to sign in. Or <a href="{{ .ConfirmationURL }}">open this link</a> in the same browser.</p>
+   ```
+
+   Do the same for **Reset password** if you like (that one works best as a link, opened in the same browser).
+2. **Decide on email confirmation.** Under **Authentication → Sign In / Providers → Email**, "Confirm email" is on by default: new password accounts get a code to confirm before they can sign in. Leave it on for anything public; switching it off makes friends' sign-up instant, but anyone could then register an address they don't own.
+
+Supabase's built-in mailer only sends a few emails an hour. That's fine for you and some friends; for more, plug in a free SMTP service like Resend under Authentication → Emails → SMTP.
 
 **Google:**
 1. [console.cloud.google.com](https://console.cloud.google.com): create a project called "BulkBrew".
