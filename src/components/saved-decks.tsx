@@ -8,6 +8,7 @@ import { FORMATS, type BuiltDeck } from "@/lib/types";
 import { CardPreviewProvider } from "./card-preview";
 import { DeckView } from "./deck-view";
 import { PowerMeter } from "./power-meter";
+import { currentPower } from "@/lib/builder/power";
 import { Button, Panel } from "./ui";
 
 export function SavedDecks() {
@@ -55,7 +56,7 @@ export function SavedDecks() {
                     <div className="mt-1 text-[15px] text-cream-dim">
                       {new Date(b.createdAt).toLocaleDateString()} · {b.engine === "ai" ? "AI" : "rules"} · ${Math.round(b.stats.priceUsd)}
                     </div>
-                    {b.stats.power && <div className="mt-2"><PowerMeter power={b.stats.power} /></div>}
+                    {b.cards.length > 0 && <div className="mt-2"><PowerMeter power={currentPower(b)} /></div>}
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1">

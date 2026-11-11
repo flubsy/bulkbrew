@@ -104,12 +104,11 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
     score: 0, reason: "commander", scryfallId: c.scryfallId, imageSmall: c.imageSmall, imageNormal: c.imageNormal,
   }));
   const entriesOf = (list: Slot[]) => list.filter((s) => s.qty > 0).map((s) => toEntry(s.c, s.qty, s.basic ? "basic" : describe(s.c, ed)));
-  const rankMap = new Map([...slots.map((s) => s.c), ...bench].map((c) => [c.card.name, c.card.edhrecRank] as const));
   const snapshot = (list: Slot[]) => {
     const entries = entriesOf(list);
     const gc = entries.filter((e) => e.gameChanger).length;
     const stats = computeStats(entries, cmdEntries, bracket, gc);
-    stats.power = ratePower({ cards: entries, commanders: cmdEntries, stats, options: build }, rankMap);
+    stats.power = ratePower({ cards: entries, commanders: cmdEntries, stats, options: build });
     const nonLand = list.filter((s) => s.c.role !== "land" && s.qty > 0);
     const match = nonLand.filter((s) => s.c.facts.edhrec || s.c.facts.inAverageDeck).length;
     return { stats, entries, edhrecMatch: nonLand.length ? Math.round((match / nonLand.length) * 100) : 0 };

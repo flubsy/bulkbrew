@@ -195,7 +195,7 @@ function CommanderRow({ c, stat, trend, showEvidence, onPick, preview }: { c: Co
       <button type="button" className="w-full px-2 py-2 text-left hover:bg-navy-600" onMouseEnter={(e) => preview.show(c.imageNormal, c.name, e)} onMouseLeave={preview.hide} onClick={() => { preview.hide(); onPick(); }}>
         <span className="flex items-center justify-between gap-3">
           <span className="truncate text-[18px]">{c.name}</span>
-          <ColorIdentity ci={c.ci} size={14} label={c.combo} />
+          <ColorIdentity ci={c.ci} size={16} label={c.combo} />
         </span>
         <span className="mt-[2px] flex flex-wrap items-center gap-x-3 text-[14px] text-muted">
           <span>{c.combo}</span>
@@ -237,7 +237,7 @@ function SelectedCommander({
         <button type="button" className="text-left" onMouseEnter={(e) => preview.show(c.imageNormal, c.name, e)} onMouseLeave={preview.hide} onClick={() => preview.open(c.imageNormal, c.name)}>
           <div className="text-[20px]">{c.name}</div>
           <div className="mt-1 flex items-center gap-2 text-[15px] text-muted">
-            <ColorIdentity ci={c.ci} size={14} label={c.combo} /> {c.combo} · {c.typeLine.split("—")[1]?.trim()}
+            <ColorIdentity ci={c.ci} size={16} label={c.combo} /> {c.combo} · {c.typeLine.split("—")[1]?.trim()}
           </div>
           <div className="mt-1 text-[15px] text-cream-dim">
             {tags?.decks ? `${tags.decks.toLocaleString()} decks on EDHREC${tags.rank ? ` · #${tags.rank.toLocaleString()} overall` : ""}` : stat ? `${stat.decks.toLocaleString()} decks on EDHREC` : "Not much EDHREC data"}

@@ -7,6 +7,7 @@ import { BRACKETS, FORMATS, type BuiltDeck, type Color, type DeckEntry, type Edh
 import { previewProps, useCardPreview } from "./card-preview";
 import { ManaCost, ManaSymbol } from "./mana";
 import { PowerMeter } from "./power-meter";
+import { currentPower } from "@/lib/builder/power";
 import { PrimerView } from "./primer-view";
 import { ComboList, UpgradeSummaryView } from "./upgrade-summary";
 import { Button, Disclosure, Input, Notice, Panel } from "./ui";
@@ -78,9 +79,9 @@ export function DeckView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d: B
           <Mini label="Engine" value={deck.engine === "ai" ? "AI" : "Rules"} sub={deck.options.format === "commander" ? `bracket ~${deck.stats.estimatedBracket}` : undefined} />
         </div>
 
-        {deck.stats.power && (
+        {deck.cards.length > 0 && (
           <div className="mt-5 flex items-start gap-4">
-            <div className="flex-1">{showPower && <PowerMeter power={deck.stats.power} detail />}</div>
+            <div className="flex-1">{showPower && <PowerMeter power={currentPower(deck)} detail />}</div>
             <Button size="sm" variant="ghost" onClick={() => setShowPower((s) => !s)} aria-pressed={showPower}>
               {showPower ? "hide power" : "show power"}
             </Button>
@@ -229,7 +230,7 @@ export function DeckView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d: B
           {c.gameChanger && <span className="shrink-0 font-pixel text-[11px] text-gold">GC</span>}
         </span>
         <span className="flex shrink-0 items-center gap-2">
-          <ManaCost cost={c.manaCost} size={14} />
+          <ManaCost cost={c.manaCost} size={16} />
           <span className="w-14 text-right text-[14px] text-muted">{fmtPrice(c.priceUsd)}</span>
         </span>
       </li>

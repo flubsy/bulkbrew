@@ -2,6 +2,7 @@ import { readJson } from "@/lib/read-body";
 import { withImages } from "@/lib/scryfall";
 import { aiAvailable, refineWithAI } from "@/lib/builder/ai";
 import { buildHeuristic, buildPool, scorePool } from "@/lib/builder/heuristic";
+import { ratePower } from "@/lib/builder/power";
 import { buildPrimer } from "@/lib/builder/primer";
 import { edhrecContextFor } from "@/lib/edhrec-context";
 import { findCombos } from "@/lib/spellbook";
@@ -58,6 +59,7 @@ export async function POST(req: Request) {
     if (bracket <= 2 && combos.included.length) deck.warnings.push(`This list contains ${combos.included.length} combo(s), which bracket ${bracket} doesn't allow. See the combos panel and cut a piece.`);
   }
 
+  deck.stats.power = ratePower(deck, { combos: deck.combos });
   deck.primer = buildPrimer(deck, cmdCards.filter((c): c is NonNullable<typeof c> => !!c), ed.tagLabel);
   return Response.json({ deck: withImages(deck), aiAvailable: aiAvailable() });
 }

@@ -37,8 +37,16 @@ create policy "user_data: own rows only" on public.user_data
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
+-- Explicit grants: newer Supabase projects don't always expose new tables to the API automatically.
+-- Signed-in users only; RLS above still limits them to their own rows. The anon role gets nothing.
+revoke all on public.user_data from anon;
+grant select, insert, update, delete on public.user_data to authenticated;
+
 -- Lets a user wipe their own cloud copy from the Account page.
 create or replace function public.delete_my_data() returns void
 language sql security invoker as $$
   delete from public.user_data where user_id = auth.uid();
 $$;
+
+revoke execute on function public.delete_my_data() from public, anon;
+grant execute on function public.delete_my_data() to authenticated;

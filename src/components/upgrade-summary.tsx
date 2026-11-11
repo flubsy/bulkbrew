@@ -128,7 +128,7 @@ function SwapCard({ n, s }: { n: number; s: Swap }) {
           <div className="px-label !mb-1">Out</div>
           <button type="button" className="flex w-full items-center justify-between gap-2 text-left text-[19px] text-cream-dim line-through decoration-orange/60" {...previewProps(preview, s.out.imageNormal ?? s.out.imageSmall, s.out.name)}>
             <span className="truncate">{s.out.name}</span>
-            <ManaCost cost={s.out.manaCost} size={14} />
+            <ManaCost cost={s.out.manaCost} size={16} />
           </button>
           <ul className="mt-2 grid gap-1 text-[15px] text-muted">
             {s.whyOut.map((r, i) => <li key={i}>− {r.text}</li>)}
@@ -138,7 +138,7 @@ function SwapCard({ n, s }: { n: number; s: Swap }) {
           <div className="px-label !mb-1 !text-orange">In</div>
           <button type="button" className="flex w-full items-center justify-between gap-2 text-left text-[19px] text-cream" {...previewProps(preview, s.in.imageNormal ?? s.in.imageSmall, s.in.name)}>
             <span className="truncate">{s.in.name}</span>
-            <ManaCost cost={s.in.manaCost} size={14} />
+            <ManaCost cost={s.in.manaCost} size={16} />
           </button>
           <ul className="mt-2 grid gap-1 text-[15px] text-cream-dim">
             {s.whyIn.map((r, i) => <li key={i}>+ {r.text}</li>)}

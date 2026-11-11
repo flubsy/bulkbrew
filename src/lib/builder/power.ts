@@ -1,84 +1,117 @@
-import type { BuiltDeck, DeckEntry, PowerRating } from "../types";
+import type { BuiltDeck, Combo, DeckEntry, PowerRating } from "../types";
 
 /**
- * BulkBrew power rating, 1–10. Commander Salt measures how annoying a card is, not how strong,
- * so we roll our own from things that actually correlate with winning earlier:
- * mana efficiency, fast mana, tutors, interaction density, card advantage, game changers,
- * combo pieces and average EDHREC popularity. It's a heuristic — treat it as a conversation starter.
+ * BulkBrew power rating, 1–10, on the scale Commander players already use
+ * (≈ EDHPowerLevel / community convention): precons 4–5, tuned casual 6–7, high power 8,
+ * cEDH 9–10. It is NOT the same as a bracket: brackets are about which cards are allowed;
+ * power is how fast and consistently the deck wins.
+ *
+ *   1. Start at 4 for a functional deck, minus points for missing fundamentals.
+ *   2. Add points only for what actually makes decks faster and more consistent:
+ *      low curve, fast mana, tutors, cheap interaction, game changers, real combos.
+ *   3. Apply ceilings so a well-built casual deck can't reach cEDH numbers:
+ *      no combos and ≤1 tutor → max 7; 9+ needs fast mana, tutors and a combo.
+ * Every factor and every cap is returned so the UI (and the FAQ) can show the working.
  */
-export function ratePower(deck: Pick<BuiltDeck, "cards" | "commanders" | "stats" | "options">, edhrecRankByName: Map<string, number | null>): PowerRating {
+export function ratePower(deck: Pick<BuiltDeck, "cards" | "commanders" | "stats" | "options">, extra: { combos?: Combo[] } = {}): PowerRating {
   const cards = deck.cards;
-  const nonLand = cards.filter((c) => c.role !== "land");
-  const n = nonLand.reduce((s, c) => s + c.quantity, 0) || 1;
   const count = (pred: (c: DeckEntry) => boolean) => cards.filter(pred).reduce((s, c) => s + c.quantity, 0);
   const factors: PowerRating["factors"] = [];
-  let pts = 0;
+  const caps: { max: number; why: string }[] = [];
+  let pts = 4;
+  factors.push({ label: "Functional deck baseline", value: "starts at 4", points: 4 });
 
-  // 1. Curve: lower is faster. 3.6+ → 0, 2.4 → +2.
-  const avg = deck.stats.avgCmc;
-  const curvePts = clamp((3.6 - avg) * 1.7, -1, 2);
-  pts += curvePts;
-  factors.push({ label: "Average mana value", value: avg.toFixed(2), points: r(curvePts) });
-
-  // 2. Ramp density and fast mana.
+  // --- Fundamentals: missing ones cost points (precons often miss one or two).
+  const lands = deck.stats.lands;
   const ramp = count((c) => c.role === "ramp");
-  const fast = count((c) => c.role === "ramp" && c.cmc <= 1);
-  const rampPts = clamp(ramp / 12, 0, 1.2) + Math.min(1.5, fast * 0.5);
-  pts += rampPts;
-  factors.push({ label: "Ramp / fast mana", value: `${ramp} ramp, ${fast} at ≤1 mana`, points: r(rampPts) });
-
-  // 3. Tutors.
-  const tutors = count((c) => c.role === "tutor");
-  const tutorPts = Math.min(1.5, tutors * 0.4);
-  pts += tutorPts;
-  factors.push({ label: "Tutors", value: String(tutors), points: r(tutorPts) });
-
-  // 4. Interaction density (removal + counters + wipes + protection).
-  const interaction = count((c) => ["removal", "counter", "wipe", "protection"].includes(c.role));
-  const intPts = clamp(interaction / 14, 0, 1.2);
-  pts += intPts;
-  factors.push({ label: "Interaction", value: String(interaction), points: r(intPts) });
-
-  // 5. Card advantage.
   const draw = count((c) => c.role === "draw");
-  const drawPts = clamp(draw / 12, 0, 1);
-  pts += drawPts;
-  factors.push({ label: "Card draw", value: String(draw), points: r(drawPts) });
+  const answers = count((c) => c.role === "removal" || c.role === "wipe" || c.role === "counter");
+  const gaps: string[] = [];
+  if (lands < 32 || lands > 42) gaps.push(`${lands} lands`);
+  if (ramp < 7) gaps.push(`${ramp} ramp`);
+  if (draw < 6) gaps.push(`${draw} draw`);
+  if (answers < 6) gaps.push(`${answers} answers`);
+  if (gaps.length) {
+    const p = -0.5 * gaps.length;
+    pts += p;
+    factors.push({ label: "Missing fundamentals", value: gaps.join(", "), points: p });
+  }
 
-  // 6. Game changers.
+  // --- Speed: curve and fast mana.
+  const avg = deck.stats.avgCmc;
+  const curvePts = avg <= 2.2 ? 1.5 : avg <= 2.6 ? 1 : avg <= 3.0 ? 0.5 : avg >= 3.8 ? -0.5 : 0;
+  pts += curvePts;
+  factors.push({ label: "Mana curve", value: `average ${avg.toFixed(2)}`, points: curvePts });
+
+  const fast = count((c) => c.role === "ramp" && c.cmc <= 1);
+  const fastPts = fast >= 4 ? 1 : fast >= 2 ? 0.5 : 0;
+  pts += fastPts;
+  factors.push({ label: "Fast mana", value: `${fast} ramp at ≤1 mana`, points: fastPts });
+
+  // --- Consistency: tutors.
+  const tutors = count((c) => c.role === "tutor");
+  const tutorPts = tutors >= 6 ? 1.5 : tutors >= 4 ? 1 : tutors >= 2 ? 0.5 : 0;
+  pts += tutorPts;
+  factors.push({ label: "Tutors", value: String(tutors), points: tutorPts });
+
+  // --- Interaction quality: cheap answers matter far more than expensive ones.
+  const cheap = count((c) => (c.role === "removal" || c.role === "counter" || c.role === "protection") && c.cmc <= 2);
+  const intPts = cheap >= 10 ? 1 : cheap >= 6 ? 0.5 : 0;
+  pts += intPts;
+  factors.push({ label: "Cheap interaction", value: `${cheap} at ≤2 mana`, points: intPts });
+
+  // --- Raw card power: game changers.
   const gc = deck.stats.gameChangers.length;
-  const gcPts = Math.min(2, gc * 0.5);
+  const gcPts = Math.min(1, gc * 0.25);
   pts += gcPts;
-  factors.push({ label: "Game changers", value: String(gc), points: r(gcPts) });
+  factors.push({ label: "Game changers", value: String(gc), points: gcPts });
 
-  // 7. Popularity: median EDHREC rank of non-land cards (lower rank → stronger staples).
-  const ranks = nonLand.map((c) => edhrecRankByName.get(c.name) ?? null).filter((x): x is number => x !== null).sort((a, b) => a - b);
-  const median = ranks.length ? ranks[Math.floor(ranks.length / 2)] : 10000;
-  const popPts = clamp((Math.log10(12000) - Math.log10(Math.max(1, median))) * 1.1, 0, 1.5);
-  pts += popPts;
-  factors.push({ label: "Staple density", value: `median EDHREC rank ${median.toLocaleString()}`, points: r(popPts) });
-
-  // 8. Combo-ish text.
-  const combo = count((c) => /untap|infinite|copy|storm|you win the game|loses the game|extra turn/i.test(c.reason + " " + c.typeLine) || c.role === "finisher");
-  const comboPts = clamp(combo / 8, 0, 0.8);
+  // --- Win speed: actual combos (Commander Spellbook), not "combo-ish" text.
+  const combos = extra.combos ?? [];
+  const twoCard = combos.filter((c) => c.cards.length <= 2).length;
+  const comboPts = combos.length >= 3 ? 1.5 : combos.length >= 1 ? 1 : 0;
   pts += comboPts;
-  factors.push({ label: "Finishers / combo pieces", value: String(combo), points: r(comboPts) });
+  factors.push({ label: "Combos", value: combos.length ? `${combos.length} (${twoCard} two-card)` : "none found", points: comboPts });
 
-  // 9. Synergy: share of non-land cards that EDHREC lists for this commander. A focused deck
-  //    beats a pile of individually decent cards. Only counts when EDHREC data was used.
+  // --- Focus: a tight synergy deck plays above its card quality.
+  const nonLand = cards.filter((c) => c.role !== "land");
+  const n = nonLand.reduce((s, c) => s + c.quantity, 0) || 1;
   const withData = nonLand.filter((c) => c.edhrec || c.inAverageDeck).reduce((s, c) => s + c.quantity, 0);
   if (withData > 0) {
     const share = withData / n;
-    const synPts = clamp((share - 0.3) * 3, 0, 1.5);
+    const synPts = share >= 0.7 ? 0.5 : 0;
     pts += synPts;
-    factors.push({ label: "Synergy (EDHREC match)", value: `${Math.round(share * 100)}% of non-lands`, points: r(synPts) });
+    factors.push({ label: "Synergy (EDHREC match)", value: `${Math.round(share * 100)}% of non-lands`, points: synPts });
   }
 
-  // Normalise: max ≈ 12.5 → 10; baseline precon ≈ 4.
-  const score = clamp(Math.round((pts / 12.5) * 9 + 1), 1, 10);
-  const label = score <= 2 ? "Jank / exhibition" : score <= 4 ? "Precon-level" : score <= 6 ? "Upgraded casual" : score <= 8 ? "High power" : "cEDH-adjacent";
-  return { score, label, factors };
+  // --- Ceilings: what a deck must have to reach the top of the scale.
+  let max = 10;
+  if (combos.length === 0 && tutors <= 1) {
+    max = Math.min(max, 7);
+    caps.push({ max: 7, why: "Capped at 7: no combos and at most one tutor. Strong casual decks rarely play above a 7." });
+  }
+  if (!(fast >= 2 && (tutors >= 3 || combos.length >= 1))) {
+    max = Math.min(max, 8);
+    caps.push({ max: 8, why: "Capped at 8: an 8+ deck needs fast mana (2+ pieces) and either tutors (3+) or a combo." });
+  }
+  if (!(fast >= 4 && tutors >= 5 && combos.length >= 1)) {
+    max = Math.min(max, 8);
+    caps.push({ max: 8, why: "Capped at 8: a 9 is fringe cEDH, which needs 4+ fast mana, 5+ tutors and a combo." });
+  }
+  if (!(fast >= 6 && tutors >= 7 && combos.length >= 2 && avg <= 2.2)) {
+    max = Math.min(max, 9);
+    caps.push({ max: 9, why: "Capped at 9: a 10 is full cEDH: 6+ fast mana, 7+ tutors, two or more combos and an average mana value of 2.2 or lower." });
+  }
+
+  const raw = Math.round(pts);
+  const score = Math.max(1, Math.min(max, raw));
+  const label = score <= 3 ? "Jank / exhibition" : score <= 5 ? "Precon-level" : score <= 7 ? "Upgraded casual" : score <= 8 ? "High power" : score === 9 ? "Fringe cEDH" : "cEDH";
+  // Only report the cap that actually held the score down.
+  const binding = raw > score ? caps.filter((c) => c.max === score).map((c) => c.why).slice(0, 1) : [];
+  return { score, label, factors, caps: binding };
 }
 
-const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
-const r = (x: number) => Math.round(x * 10) / 10;
+/** Recompute a saved deck's rating with the current formula (old saves stored the old one). */
+export function currentPower(deck: Pick<BuiltDeck, "cards" | "commanders" | "stats" | "options" | "combos">): PowerRating {
+  return ratePower(deck, { combos: deck.combos });
+}

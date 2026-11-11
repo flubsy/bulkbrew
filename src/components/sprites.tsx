@@ -92,24 +92,7 @@ export const CASTLE = [
   "llllnnnnnnnnnnlllllllllnnnnnnnnnnllllllll",
 ];
 
-/** Dragon in flight, facing right. 26 wide. */
-export const DRAGON = [
-  "........................o.",
-  ".......................oo.",
-  "..........oooo........ooo.",
-  ".........oooooo......oooo.",
-  "........oooooooo....ooooo.",
-  ".......oooooooooooooooooo.",
-  "oo....oooOOOOOOoooooooooo.",
-  ".oo..oooOOOOOOOOooooooo...",
-  "..oooooOOOOOOOOOOoooooor..",
-  "...ooooOOOOOOOOOOOooooor..",
-  "....oooooOOOOOOOOoooo.rr..",
-  ".....oooooooooooooo...r...",
-  "......oooooooooooo........",
-  ".......o..oooo..o.........",
-  "..........o..o............",
-];
+export { DRAGON } from "./pixel/grids";
 
 /** Leviathan breaching: head left, coils right. 36 wide. */
 export const LEVIATHAN = [
@@ -338,4 +321,59 @@ export const TENTACLE = [
   "..ss....",
   ".sss....",
   "ssss....",
+];
+
+/** Cauldron mark (11×11): BulkBrew's logo glyph, nav and favicon companion. */
+export const ICON_CAULDRON = [
+  "...y...y...",
+  "....y.y....",
+  ".#########.",
+  "#mwoooooOO#",
+  ".#lllllll#.",
+  ".#mlllllk#.",
+  ".#mllllkk#.",
+  "..#lllkk#..",
+  "...#####...",
+  "..o.oyo.o..",
+  "...ooyoo...",
+];
+
+/** A sleeved deck box (10×12), the thing that rises out of the brew. */
+export const DECK_BOX = [
+  ".########.",
+  "#wwwwwwwo#",
+  "#yooooooO#",
+  "#yoccccoO#",
+  "#yocggcoO#",
+  "#yocggcoO#",
+  "#yoccccoO#",
+  "#yooooooO#",
+  "#yooooooO#",
+  "#yooooooO#",
+  "#oooooooO#",
+  ".########.",
+];
+
+/** An open binder of cards (14×9): your bulk. */
+export const BINDER = [
+  "..............",
+  ".dddddd.dddddd",
+  ".dobd#d.dedbd#",
+  ".d#d#d#.d#d#d#",
+  ".dedod#.dodyd#",
+  ".d#d#d#.d#d#d#",
+  ".dddddd.dddddd",
+  "nnnnnnnnnnnnnn",
+  ".nnnnnnnnnnnn.",
+];
+
+/** A pointing arrow (7×7) for sequences and links. */
+export const ARROW = [
+  "...o...",
+  "...oo..",
+  "ooooOo.",
+  "oooooOo",
+  "ooooOo.",
+  "...oo..",
+  "...o...",
 ];

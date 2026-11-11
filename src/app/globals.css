@@ -382,3 +382,10 @@ textarea.px-input { line-height: 1.15; }
 .font-pixel, .font-wordmark, .px-btn, .px-chip, .px-label, .px-table th { font-size-adjust: none; }
 :root[data-font="readable"] body { -webkit-font-smoothing: auto; -moz-osx-font-smoothing: grayscale; letter-spacing: 0; }
 :root[data-font="readable"] .font-pixel, :root[data-font="readable"] .px-btn, :root[data-font="readable"] .px-chip, :root[data-font="readable"] .px-label { letter-spacing: 0.01em; }
+
+/* Browser surfaces in the palette: scrollbars, caret, native accents. */
+html { scrollbar-color: var(--line-strong) var(--navy-900); accent-color: var(--orange); caret-color: var(--orange); }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: var(--navy-900); }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border: 3px solid var(--navy-900); }
+::-webkit-scrollbar-thumb:hover { background: var(--orange-deep); }

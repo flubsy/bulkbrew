@@ -10,7 +10,8 @@ import { createClient, type Provider, type SupabaseClient } from "@supabase/supa
  */
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// The Vercel integration sets the anon key; newer Supabase projects call it the "publishable" key.
+const KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 export const accountsConfigured = !!(URL && KEY);
 
