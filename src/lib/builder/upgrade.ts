@@ -245,7 +245,9 @@ function reasonsIn(c: Candidate, out: Candidate, ed: EdhrecContext, cmd: string,
   if (f.edhrec?.synergy !== undefined && f.edhrec.synergy >= 0.15) {
     r.push({ kind: "edhrec", text: `High synergy (+${pct(f.edhrec.synergy)}): ${cmd} decks play it far more often than other decks in these colours.` });
   }
+  if (f.adjustedInclusion !== undefined) r.push({ kind: "edhrec", text: `Newer than ${cmd}: allowing for decks built before it existed, it's in about ${pct(f.adjustedInclusion)} of recent lists.` });
   if (f.inAverageDeck) r.push({ kind: "edhrec", text: `Part of EDHREC's average ${cmd} decklist.` });
+  if (f.archetype && (f.archetype.synergy ?? 0) >= 0.08 && ed.archetypeLabel) r.push({ kind: "edhrec", text: `Strong in ${ed.archetypeLabel} decks generally: ${pct(f.archetype.inclusion)} of them run it (+${pct(f.archetype.synergy)} synergy), whatever the commander.` });
   if (f.tribe === "lord") r.push({ kind: "theme", text: "A tribal lord: it's on-type and boosts or rewards the tribe." });
   else if (f.tribe === "member") r.push({ kind: "theme", text: "On-tribe creature for your typal theme." });
   else if (f.tribe === "payoff") r.push({ kind: "theme", text: "Rewards you for playing the tribe." });

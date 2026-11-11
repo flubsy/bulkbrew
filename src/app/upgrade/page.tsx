@@ -14,7 +14,7 @@ export default function UpgradePage() {
         <Sprite grid={ANVIL} scale={3} className="mb-1" />
       </div>
       <p className="mt-3 max-w-2xl text-[20px] text-cream-dim">
-        Bring a deck you already play (a Moxfield link, a pasted list or a saved build). Deckbit finds the best swaps from cards sitting in your collection and explains every one.
+        Bring a deck you already play (a Moxfield link, a pasted list or a saved build). BulkBrew finds the best swaps from cards sitting in your collection and explains every one.
       </p>
       <DeckUpgrader />
     </div>

@@ -7,10 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "roles": "node scripts/build-roles.mjs"
+    "roles": "node scripts/build-roles.mjs",
+    "icons": "node scripts/build-icons.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.7.0",
+    "@supabase/supabase-js": "^2.119.0",
     "cheerio": "^1.2.0",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",

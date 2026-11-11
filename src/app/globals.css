@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   Deckbit design tokens — "night harbour" palette.
+   BulkBrew design tokens — "night harbour" palette.
    Navy sea, charcoal cliffs, one hot orange lamp. Everything is on a 4px grid.
 --------------------------------------------------------------------------- */
 :root {
@@ -32,6 +32,18 @@
 
   --background: var(--navy-800);
   --foreground: var(--cream);
+
+  /* Text fonts. Pixel by default; "readable" swaps everything except the wordmark to
+     Atkinson Hyperlegible (designed for low-vision legibility). Toggle: the Aa button. */
+  --font-ui: var(--font-pixelify), monospace;
+  --font-reading: var(--font-pixelify), monospace;
+  /* Normalises lowercase height so both fonts look the same size at the same px value. */
+  --reading-adjust: 0.4;
+}
+
+:root[data-font="readable"] {
+  --font-ui: var(--font-atkinson), system-ui, sans-serif;
+  --font-reading: var(--font-atkinson), system-ui, sans-serif;
 }
 
 @theme inline {
@@ -58,11 +70,11 @@
   --color-sea-light: var(--sea-light);
   --color-green: var(--green);
   --color-red: var(--red);
-  --font-pixel: var(--font-pixelify), monospace;
+  --font-pixel: var(--font-ui);
   --font-wordmark: var(--font-press-start), monospace;
-  --font-body: var(--font-vt323), monospace;
-  --font-sans: var(--font-vt323), monospace;
-  --font-mono: var(--font-vt323), monospace;
+  --font-body: var(--font-reading);
+  --font-sans: var(--font-reading);
+  --font-mono: var(--font-reading);
 }
 
 html {
@@ -77,9 +89,12 @@ body {
   color: var(--cream);
   font-family: var(--font-body);
   font-size: 20px;
+  font-size-adjust: var(--reading-adjust);
+  letter-spacing: 0.01em;
   line-height: 1.2;
   -webkit-font-smoothing: none;
   -moz-osx-font-smoothing: unset;
+  line-height: 1.35;
   image-rendering: pixelated;
 }
 
@@ -362,3 +377,8 @@ textarea.px-input { line-height: 1.15; }
 .pb-tabbar { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 @media (min-width: 768px) { .pb-tabbar { padding-bottom: 48px; } }
 
+
+/* Headings, labels, buttons and chips are sized for the UI font directly. */
+.font-pixel, .font-wordmark, .px-btn, .px-chip, .px-label, .px-table th { font-size-adjust: none; }
+:root[data-font="readable"] body { -webkit-font-smoothing: auto; -moz-osx-font-smoothing: grayscale; letter-spacing: 0; }
+:root[data-font="readable"] .font-pixel, :root[data-font="readable"] .px-btn, :root[data-font="readable"] .px-chip, :root[data-font="readable"] .px-label { letter-spacing: 0.01em; }

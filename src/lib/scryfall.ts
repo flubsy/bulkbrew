@@ -6,7 +6,7 @@ import type { CardData, Color } from "./types";
  */
 
 export const SCRYFALL_HEADERS = {
-  "User-Agent": "Deckbit/0.1 (collection deck builder; local app)",
+  "User-Agent": "BulkBrew/0.1 (collection deck builder; local app)",
   Accept: "application/json",
 };
 

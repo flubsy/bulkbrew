@@ -123,17 +123,6 @@ export const LEVIATHAN = [
   "......ssssssss..........sssssss.....",
 ];
 
-export const BOAT = [
-  "........#.......",
-  "........#.......",
-  "......###.......",
-  "........#.......",
-  "......o###......",
-  "......###.......",
-  "###############.",
-  ".#############..",
-  "..###########...",
-];
 
 /** A wizard with a staff, 12 wide. */
 export const WIZARD = [
@@ -248,4 +237,105 @@ export const SWORD = [
   "...k...",
   "...k...",
   "..ggg..",
+];
+
+/* ---------- 11×11 nav icons (drawn for 2× scale) ---------- */
+
+export const ICON_HOME = [
+  ".k.k...k.k.",
+  ".kkk...kkk.",
+  ".kok...kok.",
+  ".kkk.o.kkk.",
+  ".kkkkkkkkk.",
+  ".kkwkkkwkk.",
+  ".kkkkkkkkk.",
+  ".kkkk#kkkk.",
+  ".kkk###kkk.",
+  "lllll#lllll",
+  "lllllllllll",
+];
+
+export const ICON_CARDS = [
+  "...dddddd..",
+  "..dkkkkkkd.",
+  ".dddddd.kd.",
+  ".d####d.kd.",
+  ".d#oo#d.kd.",
+  ".d#oo#d.kd.",
+  ".d####d.kd.",
+  ".dccccd.kd.",
+  ".dccccdkkd.",
+  ".ddddddddd.",
+  "...........",
+];
+
+export const ICON_SWORD = [
+  "........cc.",
+  ".......ccc.",
+  "......ccc..",
+  ".....ccc...",
+  "....ccc....",
+  ".g.ccc.....",
+  ".ggcc......",
+  "..gg.......",
+  ".k.gg......",
+  "kk..g......",
+  "k..........",
+];
+
+export const ICON_DIE = [
+  ".ccccccccc.",
+  "cdddddddddc",
+  "cd#ddddd#dc",
+  "cdddddddddc",
+  "cdddd#ddddc",
+  "cdddddddddc",
+  "cd#ddddd#dc",
+  "cdddddddddc",
+  "cdddddddddc",
+  ".ccccccccc.",
+  "...........",
+];
+
+export const ICON_ANVIL = [
+  "...........",
+  "...........",
+  "..o........",
+  ".ooooooooo.",
+  "..kkkkkkkkk",
+  "...kkkkkkk.",
+  ".....kkk...",
+  "....kkkkk..",
+  "...kkkkkkk.",
+  "...........",
+  "...........",
+];
+
+export const ICON_CHEST = [
+  "...........",
+  "..ggggggg..",
+  ".gOOOOOOOg.",
+  ".gOOOOOOOg.",
+  ".ggggoggg..",
+  ".gOOOoOOOg.",
+  ".gOOOOOOOg.",
+  ".gOOOOOOOg.",
+  ".ggggggggg.",
+  "...........",
+  "...........",
+];
+
+/** Kraken tentacle, for the bay. */
+export const TENTACLE = [
+  "....ss..",
+  "...s..s.",
+  "...s..s.",
+  "....s.s.",
+  "......s.",
+  ".....ss.",
+  "....ss..",
+  "...ss...",
+  "..ss....",
+  ".sss....",
+  "ssss....",
 ];

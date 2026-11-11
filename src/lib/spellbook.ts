@@ -24,6 +24,8 @@ type ApiCombo = {
   bracketTag?: string;
   popularity?: number;
   manaValueNeeded?: number;
+  easyPrerequisites?: string;
+  notablePrerequisites?: string;
 };
 type ApiResult = { results?: { included?: ApiCombo[]; almostIncluded?: ApiCombo[] } };
 
@@ -36,6 +38,8 @@ function toCombo(c: ApiCombo, missing: string[] = []): Combo {
     url: `https://commanderspellbook.com/combo/${c.id}/`,
     popularity: c.popularity,
     missing,
+    steps: c.description?.trim() || undefined,
+    requires: [c.easyPrerequisites, c.notablePrerequisites].filter((x) => x && x.trim()).join(" ").trim() || undefined,
   };
 }
 
@@ -45,7 +49,7 @@ export async function findCombos(commanders: string[], cards: string[]): Promise
     try {
       const res = await fetch("https://backend.commanderspellbook.com/find-my-combos", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "Deckbit/0.1 (collection deck builder)" },
+        headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "BulkBrew/0.1 (collection deck builder)" },
         body: JSON.stringify({ commanders: commanders.map((card) => ({ card })), main: cards.map((card) => ({ card })) }),
       });
       if (!res.ok) return null;

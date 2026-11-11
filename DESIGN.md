@@ -1,4 +1,4 @@
-# Deckbit — design system
+# BulkBrew — design system
 
 ## Direction
 "Night harbour, 8-bit." A moonlit navy sea seen from a dark cliff, one hot orange lamp. Every element sits on a 4px grid. No rounded corners, no gradients-as-decoration, no drop-shadow blur: shadows are hard offsets, borders are stepped.
@@ -23,9 +23,10 @@
 Orange is rationed: one primary button per view, section headings, active chips. Never orange on orange.
 
 ## Type
-- **Display**: Press Start 2P, 9–34px, uppercase, line-height 1.5–1.6. Used for headings, labels, buttons, chips. Never for paragraphs.
-- **Body**: VT323 at 17–21px (it is a small-x-height pixel face; 20px is the comfortable default). Font smoothing off.
-- Hierarchy comes from size and colour, not weight (both faces are single-weight).
+- **Wordmark only**: Press Start 2P (the BulkBrew logo and the hero headline). Never anywhere else.
+- **UI and headings**: Pixelify Sans 600/700, 11–24px, for headings, labels, buttons, chips and nav.
+- **Body**: Pixelify Sans 400. `font-size-adjust: 0.4` normalises lowercase height, so component px sizes (14–21px) read the same in either font.
+- **Readable mode**: the header's "Aa" toggle sets `html[data-font="readable"]`, swapping all text except the wordmark to Atkinson Hyperlegible. It's saved per device and applied before first paint by an inline script in `layout.tsx`. Readability is a product requirement (see PRODUCT.md), so body text must never return to a thin pixel face like VT323.
 
 ## Components (`src/components/ui.tsx`)
 - `.px-border` — notched-corner border built from four box-shadows. Add `-orange` / `-gold` / `-strong` tones.
@@ -33,14 +34,17 @@ Orange is rationed: one primary button per view, section headings, active chips.
 - `.px-chip` — toggleable tags, `aria-pressed` drives the orange state.
 - `.px-input` — navy-900 field, orange border on focus.
 - `.px-progress` — striped orange fill, stepped transition.
-- Sprites: `src/components/sprites.tsx` renders string grids as crisp SVG rects (moon, boat, house, card, skull, gear).
+- Sprites: `src/components/sprites.tsx` renders string grids as crisp SVG rects: castle, dragon, wizard, leviathan, kraken tentacle, moon, tome, sword, die, anvil, and 11×11 nav icons. No boats. Follow `.claude/skills/pixel-art-skill`.
+- Mana symbols: `src/components/mana.tsx` holds 9×9 pixel glyphs (sun, drop, skull, flame, tree, diamond), never coloured squares.
+- App icon: `scripts/build-icons.mjs` renders the 16×16 card-and-gem grid to PNGs (192/512, maskable) and `icon.svg`. Run it with `npm run icons`.
 
 ## Motion
-Stepped only (`steps()`), never eased. Twinkle, sea shimmer and cursor blink are the only animations; all off under `prefers-reduced-motion`.
+Stepped only (`steps()`), never eased. Twinkle, sea shimmer, cursor blink, the dragon flying across the hero, and the bob of the leviathan and tentacles. All are off under `prefers-reduced-motion`.
 
 ## Layout
 - Max width 72rem, 16px gutters, 4px-multiple spacing.
-- Desktop: top bar. Mobile: fixed bottom tab bar (4 tabs) with safe-area padding; main content gets `pb-tabbar`.
+- Desktop (lg+): top bar with icon links (Collection, Build, Roll, Upgrade), a **Saved ▾** menu (Saved decks, Reference decks, Wishlist), the Aa toggle and the account button.
+- Mobile: fixed bottom tab bar with 6 icon tabs (Home, Cards, Build, Roll, Upgrade, Saved) and safe-area padding. Main content gets `pb-tabbar`. The Saved pages share a tab strip.
 - Builder: 400px options column + fluid result column; stacks on mobile.
 - Tables scroll horizontally inside their panel; nothing else scrolls sideways.
 

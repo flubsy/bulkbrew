@@ -217,6 +217,21 @@ export interface Combo {
   popularity?: number;
   /** Pieces not in the list that was checked (for "almost" combos). */
   missing: string[];
+  /** Step-by-step instructions from Commander Spellbook. */
+  steps?: string;
+  /** What must be true first (e.g. "Isochron Scepter on the battlefield"). */
+  requires?: string;
+}
+
+/** "How this deck works" — written from data, no AI. */
+export interface Primer {
+  summary: string;
+  plan: string[];
+  keyCards: { name: string; why: string }[];
+  winCons: { name: string; how: string }[];
+  mulligan: string[];
+  phases: { label: string; cards: string[]; tip: string }[];
+  watchOut: string[];
 }
 
 /** Colour combination names (guilds, shards, wedges, 4c, 5c). Keyed by sorted WUBRG letters. */
@@ -267,6 +282,8 @@ export interface BuiltDeck {
   wishlist: EdhrecCard[];
   /** Combos fully present in the deck (Commander Spellbook). */
   combos?: Combo[];
+  /** How the deck plays — generated from the list, EDHREC and Spellbook data. */
+  primer?: Primer;
   engine: "heuristic" | "ai";
   name?: string;
   /** Set when this deck came from the upgrade tool. */
@@ -298,7 +315,7 @@ export interface UpgradeSummary {
   unresolved: string[];
 }
 
-/** Deckbit's own 1–10 power rating with the factors behind it. */
+/** BulkBrew's own 1–10 power rating with the factors behind it. */
 export interface PowerRating {
   score: number; // 1..10
   label: string;

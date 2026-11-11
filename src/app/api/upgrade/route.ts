@@ -1,4 +1,5 @@
 import { buildPool } from "@/lib/builder/heuristic";
+import { buildPrimer } from "@/lib/builder/primer";
 import { comboSuggestions, upgradeDeck, type UpgradeOptions } from "@/lib/builder/upgrade";
 import { edhrecContextFor } from "@/lib/edhrec-context";
 import { fetchCollection, fetchNamed, normalizeCard } from "@/lib/scryfall";
@@ -13,6 +14,8 @@ interface UpgradeRequest {
   owned: { card: CardData; quantity: number }[];
   build: BuildOptions;
   upgrade: UpgradeOptions;
+  /** Just explain the list (primer + combos), no swaps. Works without a collection. */
+  explainOnly?: boolean;
 }
 
 /** Resolve deck card names to Scryfall data (75 per request). */
@@ -49,7 +52,8 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
   if (!body?.deck?.cards?.length) return Response.json({ error: "That deck has no cards." }, { status: 400 });
-  if (!body.owned?.length) return Response.json({ error: "Import your collection first — upgrades come from your bulk." }, { status: 400 });
+  if (!body.owned?.length && !body.explainOnly) return Response.json({ error: "Import your collection first — upgrades come from your bulk." }, { status: 400 });
+  if (body.explainOnly) body.upgrade = { ...body.upgrade, maxSwaps: 0 };
 
   const main = body.deck.cards.filter((c) => c.board === "main" || c.board === "commander");
   const names = [...new Set(main.map((c) => c.name))];
@@ -76,8 +80,8 @@ export async function POST(req: Request) {
     .filter((d): d is { card: CardData; quantity: number } => !!d.card && !cmdSet.has(d.card.name.toLowerCase()));
 
   const build: BuildOptions = { ...body.build, commander: commanders[0]?.name, partner: commanders[1]?.name };
-  const ed = await edhrecContextFor(build);
-  const pool = buildPool(body.owned);
+  const ed = await edhrecContextFor(build, { ci: [...new Set(commanders.flatMap((c) => c.colorIdentity))], commanderReleased: commanders[0]?.releasedAt });
+  const pool = buildPool(body.owned ?? []);
 
   const result = upgradeDeck({
     name: body.deck.name,
@@ -102,5 +106,12 @@ export async function POST(req: Request) {
   }
 
   if (!ed.cards.length && build.useEdhrec) result.warnings.push("EDHREC had nothing for this commander (or was unreachable), so swaps are based on card quality and theme only.");
+  result.primer = buildPrimer(result, commanders, ed.tagLabel);
+  if (body.explainOnly) {
+    result.upgrade = undefined;
+    result.alternatives = [];
+    result.name = body.deck.name;
+    result.notes = result.notes.filter((n) => !n.startsWith("Compared") && !n.startsWith("Stopped"));
+  }
   return Response.json({ deck: result });
 }

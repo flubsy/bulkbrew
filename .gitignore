@@ -43,3 +43,10 @@ next-env.d.ts
 # Deckbit API cache (EDHREC / Commander Spellbook)
 /.cache/
 !.env.example
+
+# Impeccable: per-machine settings stay local (PRODUCT.md, DESIGN.md and .impeccable/config.json are shared)
+/.impeccable/config.local.json
+
+# Claude Code: per-machine settings, and Impeccable's downloaded helper binary (fetched on demand)
+/.claude/settings.local.json
+/.claude/skills/impeccable/scripts/bin/

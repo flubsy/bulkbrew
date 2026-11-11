@@ -6,23 +6,22 @@ import { mapEdhrecTag } from "@/lib/tags";
 import { COLOR_COMBOS, THEMES, comboKey, type BuildOptions, type CardData, type EdhrecTag, type ThemeId } from "@/lib/types";
 import { useCardPreview } from "./card-preview";
 import { ColorIdentity } from "./mana";
-import { DIE, Sprite } from "./sprites";
-import { Button, Input, Label, Notice, Panel, Select } from "./ui";
+import { Button, Input, Label, Panel, Select } from "./ui";
 
-type Stat = { decks: number; colorRank: number; trend: number | null };
+export type Stat = { decks: number; colorRank: number; trend: number | null };
 type Sort = "fit" | "popular" | "trending" | "name";
-type RollMode = "top-tag" | "random-tag" | "tag-first";
+export type RollMode = "top-tag" | "random-tag" | "tag-first";
 
 const COMBO_ORDER = Object.keys(COLOR_COMBOS);
 const THEME_LABEL = Object.fromEntries(THEMES.map((t) => [t.id, t.label])) as Record<string, string>;
-const OBSCURE = 300; // decks on EDHREC below which a commander counts as niche
+export const OBSCURE = 300; // decks on EDHREC below which a commander counts as niche
 
 function fmtDecks(n: number) {
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);
 }
 
 /** Popularity for the user's commanders from EDHREC (cached server-side for a day). */
-function useCommanderStats(list: CommanderOption[]) {
+export function useCommanderStats(list: CommanderOption[]) {
   const [data, setData] = useState<{ stats: Record<string, Stat>; trending: Record<string, number> } | null>(null);
   const [loading, setLoading] = useState(false);
   const key = useMemo(() => list.map((c) => c.name).sort().join("|"), [list]);
@@ -47,7 +46,7 @@ function useCommanderStats(list: CommanderOption[]) {
   return { stats: data?.stats ?? {}, trending: data?.trending ?? {}, loading };
 }
 
-async function fetchTags(name: string, partner?: string): Promise<{ decks: number | null; rank: number | null; tags: EdhrecTag[] }> {
+export async function fetchTags(name: string, partner?: string): Promise<{ decks: number | null; rank: number | null; tags: EdhrecTag[] }> {
   try {
     const res = await fetch(`/api/edhrec/commander?name=${encodeURIComponent(name)}${partner ? `&partner=${encodeURIComponent(partner)}` : ""}`);
     if (res.ok) return await res.json();
@@ -55,10 +54,10 @@ async function fetchTags(name: string, partner?: string): Promise<{ decks: numbe
   return { decks: null, rank: null, tags: [] };
 }
 
-function pick<T>(xs: T[]): T {
+export function pick<T>(xs: T[]): T {
   return xs[Math.floor(Math.random() * xs.length)];
 }
-function weighted<T>(xs: T[], w: (x: T) => number): T {
+export function weighted<T>(xs: T[], w: (x: T) => number): T {
   const total = xs.reduce((s, x) => s + w(x), 0);
   let r = Math.random() * total;
   for (const x of xs) { r -= w(x); if (r <= 0) return x; }
@@ -70,15 +69,11 @@ export function CommanderPicker({
   opts,
   setOpts,
   knownTypes,
-  tribes,
-  onRolledBuild,
 }: {
   cards: CardData[];
   opts: BuildOptions;
   setOpts: (fn: (o: BuildOptions) => BuildOptions) => void;
   knownTypes: string[];
-  tribes: { t: string; n: number }[];
-  onRolledBuild: (o: BuildOptions) => void;
 }) {
   const preview = useCardPreview();
   const [q, setQ] = useState("");
@@ -86,11 +81,6 @@ export function CommanderPicker({
   const [sort, setSort] = useState<Sort>("fit");
   const [tags, setTags] = useState<{ decks: number | null; rank: number | null; tags: EdhrecTag[] } | null>(null);
   const [tagsFor, setTagsFor] = useState<string | null>(null);
-  const [rollMode, setRollMode] = useState<RollMode>("top-tag");
-  const [skipObscure, setSkipObscure] = useState(true);
-  const [buildNow, setBuildNow] = useState(false);
-  const [rolling, setRolling] = useState(false);
-  const [rollNote, setRollNote] = useState<string | null>(null);
 
   const all = useMemo(() => suggestCommanders(cards, opts.format, opts.themes, opts.tribe), [cards, opts.format, opts.themes, opts.tribe]);
   const { stats, trending, loading } = useCommanderStats(useMemo(() => suggestCommanders(cards, opts.format, [], undefined), [cards, opts.format]));
@@ -136,61 +126,6 @@ export function CommanderPicker({
       const themes = [...new Set([...o.themes.filter((x) => x !== "tribal"), ...m.themes])] as ThemeId[];
       return { ...o, edhrecTag: t.slug, themes, tribe: m.tribe ?? (m.themes.includes("tribal") ? o.tribe : undefined) };
     });
-  }
-
-  async function roll() {
-    setRolling(true);
-    setRollNote(null);
-    try {
-      let next: BuildOptions | null = null;
-      if (rollMode === "tag-first") {
-        // Random theme (or tribe), then a commander that genuinely fits it. Re-roll themes nobody supports.
-        let theme: ThemeId = "tokens";
-        let tribe: string | undefined;
-        let ranked: CommanderOption[] = [];
-        for (let attempt = 0; attempt < 15 && !ranked.length; attempt++) {
-          const useTribe = tribes.length > 0 && Math.random() < 0.3;
-          theme = useTribe ? "tribal" : pick(THEMES.filter((t) => t.id !== "tribal")).id;
-          tribe = useTribe ? pick(tribes.filter((t) => t.n >= 8).length ? tribes.filter((t) => t.n >= 8) : tribes).t : undefined;
-          ranked = suggestCommanders(cards, opts.format, [theme], tribe)
-            .filter((c) => c.fit >= 6 && (!combo || comboKey(c.ci) === combo) && (!skipObscure || decksOf(c) >= OBSCURE || !Object.keys(stats).length))
-            .sort((a, b) => b.fit - a.fit)
-            .slice(0, 12);
-        }
-        if (!ranked.length) { setRollNote("Couldn't find a theme your commanders clearly support. Try clearing the colour filter."); return; }
-        const c = pick(ranked);
-        next = { ...opts, commander: c.name, partner: undefined, themes: [theme], tribe, edhrecTag: undefined };
-        setRollNote(`Rolled the theme ${tribe ? `${tribe} tribal` : THEME_LABEL[theme]}, then ${c.name} (${c.evidence[0]?.label ?? "fits"}).`);
-      } else {
-        let pool = all.filter((c) => !combo || comboKey(c.ci) === combo);
-        if (skipObscure && Object.keys(stats).length) {
-          const known = pool.filter((c) => decksOf(c) >= OBSCURE);
-          if (known.length) pool = known;
-        }
-        if (!pool.length) { setRollNote("No commanders match that colour filter."); return; }
-        const c = pick(pool);
-        const info = await fetchTags(c.name);
-        const card = cards.find((x) => x.name === c.name)!;
-        if (info.tags.length) {
-          const t = rollMode === "top-tag" ? info.tags[0] : weighted(info.tags.slice(0, 10), (x) => x.decks);
-          const m = mapEdhrecTag(t.slug, knownTypes);
-          next = { ...opts, commander: c.name, partner: undefined, edhrecTag: t.slug, themes: m.themes, tribe: m.tribe };
-          setRollNote(`Rolled ${c.name}. Tag: ${t.label} (${t.decks.toLocaleString()} EDHREC decks${rollMode === "top-tag" ? ", its most popular build" : ""}).`);
-        } else {
-          const det = detectThemes(card);
-          const d = det.length ? (rollMode === "top-tag" ? det[0] : pick(det)) : null;
-          next = { ...opts, commander: c.name, partner: undefined, edhrecTag: undefined, themes: d ? [d.theme] : [], tribe: undefined };
-          setRollNote(`Rolled ${c.name}. EDHREC has no tags for it, so the theme comes from its text: ${d ? `${THEME_LABEL[d.theme]} (“${d.quote}”)` : "none found — a goodstuff build"}.`);
-        }
-      }
-      if (next) {
-        const n = next;
-        setOpts(() => n);
-        if (buildNow) onRolledBuild(n);
-      }
-    } finally {
-      setRolling(false);
-    }
   }
 
   return (
@@ -250,27 +185,6 @@ export function CommanderPicker({
         )}
       </Panel>
 
-      <Panel title="Roll a commander" aside={<Sprite grid={DIE} scale={2} />}>
-        <Label>Mode</Label>
-        <Select value={rollMode} onChange={(e) => setRollMode(e.target.value as RollMode)}>
-          <option value="top-tag">Random commander + its most popular build</option>
-          <option value="random-tag">Random commander + a random build of it</option>
-          <option value="tag-first">Random theme + a commander that fits it</option>
-        </Select>
-        <label className="mt-3 flex items-center gap-3 text-[17px]">
-          <input type="checkbox" className="h-5 w-5 accent-orange" checked={skipObscure} onChange={(e) => setSkipObscure(e.target.checked)} />
-          Skip niche commanders (under {OBSCURE} EDHREC decks)
-        </label>
-        <label className="mt-2 flex items-center gap-3 text-[17px]">
-          <input type="checkbox" className="h-5 w-5 accent-orange" checked={buildNow} onChange={(e) => setBuildNow(e.target.checked)} />
-          Build the deck straight away
-        </label>
-        <p className="mt-2 text-[14px] text-muted">Uses the colour filter above if one is set. Builds are always rules-based; no AI needed.</p>
-        <div className="mt-3 flex gap-2">
-          <Button onClick={roll} disabled={rolling || !all.length}>{rolling ? "Rolling…" : "Roll"}</Button>
-        </div>
-        {rollNote && <div className="mt-3"><Notice tone="ok">{rollNote}</Notice></div>}
-      </Panel>
     </>
   );
 }

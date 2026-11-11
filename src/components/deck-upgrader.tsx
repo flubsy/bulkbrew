@@ -105,11 +105,11 @@ function Inner() {
     }
   }
 
-  async function run() {
+  async function run(explainOnly = false) {
     if (!deck) return;
     setError(null);
     setResult(null);
-    setBusy("Scoring your list and your collection, then finding the best swaps…");
+    setBusy(explainOnly ? "Reading the list and writing a primer…" : "Scoring your list and your collection, then finding the best swaps…");
     try {
       const savedNames = skipSaved ? (builds ?? []).flatMap((b) => b.cards.map((c) => c.name)) : [];
       const neverList = [...never.split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean), ...savedNames];
@@ -133,7 +133,7 @@ function Inner() {
       const res = await fetch("/api/upgrade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deck, commanders, owned: enriched.map((c) => ({ card: c.card, quantity: c.quantity })), build, upgrade }),
+        body: JSON.stringify({ deck, commanders, owned: explainOnly ? [] : enriched.map((c) => ({ card: c.card, quantity: c.quantity })), build, upgrade, explainOnly }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
@@ -144,7 +144,7 @@ function Inner() {
       }
       const d: BuiltDeck = json.deck;
       setResult(d);
-      await db.builds.put(d);
+      if (!explainOnly) await db.builds.put(d);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upgrade failed");
     } finally {
@@ -152,15 +152,7 @@ function Inner() {
     }
   }
 
-  if (owned && owned.length === 0) {
-    return (
-      <div className="mt-8">
-        <Notice tone="warn">
-          Import your collection first — upgrades come from <a href="/collection" className="text-orange underline">your bulk</a>.
-        </Notice>
-      </div>
-    );
-  }
+  const noCollection = !!owned && owned.length === 0;
 
   const mainCount = deck?.cards.filter((c) => c.board === "main").reduce((s, c) => s + c.quantity, 0) ?? 0;
 
@@ -188,7 +180,7 @@ function Inner() {
             {source === "saved" && (
               <Select value={savedId} onChange={(e) => setSavedId(e.target.value)} aria-label="Saved deck">
                 <option value="">Choose…</option>
-                {!!builds?.length && <optgroup label="Built in Deckbit">{builds.map((b) => <option key={b.id} value={b.id}>{b.name ?? (b.commanders.map((c) => c.name).join(" / ") || "Deck")} · {new Date(b.createdAt).toLocaleDateString()}</option>)}</optgroup>}
+                {!!builds?.length && <optgroup label="Built in BulkBrew">{builds.map((b) => <option key={b.id} value={b.id}>{b.name ?? (b.commanders.map((c) => c.name).join(" / ") || "Deck")} · {new Date(b.createdAt).toLocaleDateString()}</option>)}</optgroup>}
                 {!!refDecks?.length && <optgroup label="Reference decks">{refDecks.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>}
               </Select>
             )}
@@ -265,7 +257,10 @@ function Inner() {
           </label>
         </Disclosure>
 
-        <Button onClick={run} disabled={!deck || !!busy || (!!needCommander && !commanderPick)}>Upgrade from my bulk</Button>
+        <Button onClick={() => run()} disabled={!deck || !!busy || (!!needCommander && !commanderPick)}>Upgrade from my bulk</Button>
+        <Button variant="ghost" onClick={() => run(true)} disabled={!deck || !!busy || (!!needCommander && !commanderPick)}>Just explain this deck</Button>
+        <p className="-mt-2 text-[14px] text-muted">&ldquo;Explain&rdquo; writes a primer (game plan, key cards, combos, mulligan tips) for the list as it is. It doesn&apos;t need your collection.</p>
+        {noCollection && <Notice tone="warn">Upgrades come from <a href="/collection" className="text-orange underline">your collection</a>, so import it first. &ldquo;Just explain&rdquo; works without one.</Notice>}
         {busy && <Notice>{busy}</Notice>}
         {error && <Notice tone="error">{error}</Notice>}
       </div>

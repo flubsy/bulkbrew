@@ -217,7 +217,7 @@ function DeckBuilderInner() {
 
         {isEdh && (
           <>
-            <CommanderPicker cards={cards} opts={opts} setOpts={setOpts} knownTypes={knownTypes} tribes={tribes} onRolledBuild={(o) => build(o)} />
+            <CommanderPicker cards={cards} opts={opts} setOpts={setOpts} knownTypes={knownTypes} />
             {partnerable.length > 0 && (
               <Panel title="Partner / background">
                 <Select value={opts.partner ?? ""} onChange={(e) => setOpts((o) => ({ ...o, partner: e.target.value || undefined }))} aria-label="Partner">

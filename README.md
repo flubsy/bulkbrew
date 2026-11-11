@@ -1,4 +1,4 @@
-# Deckbit
+# BulkBrew
 
 Build the strongest Magic: The Gathering deck from the cards you already own. 8-bit night-harbour look, mobile-first, installable as a PWA.
 
