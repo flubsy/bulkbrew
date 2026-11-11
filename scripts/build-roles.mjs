@@ -18,7 +18,7 @@ const TAGS = {
   recursion: "recursion",
 };
 
-const HEADERS = { "User-Agent": "Deckbit/0.1 (collection deck builder; role table build)", Accept: "application/json" };
+const HEADERS = { "User-Agent": "BulkBrew/0.1 (collection deck builder; role table build)", Accept: "application/json" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function getJson(url, tries = 4) {

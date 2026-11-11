@@ -1,7 +1,7 @@
 import type { BuiltDeck, DeckEntry, PowerRating } from "../types";
 
 /**
- * Deckbit power rating, 1–10. Commander Salt measures how annoying a card is, not how strong,
+ * BulkBrew power rating, 1–10. Commander Salt measures how annoying a card is, not how strong,
  * so we roll our own from things that actually correlate with winning earlier:
  * mana efficiency, fast mana, tutors, interaction density, card advantage, game changers,
  * combo pieces and average EDHREC popularity. It's a heuristic — treat it as a conversation starter.

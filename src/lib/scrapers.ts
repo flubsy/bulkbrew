@@ -13,7 +13,7 @@ import type { ReferenceDeck } from "./types";
  *  - Text:        a pasted decklist.
  */
 
-const UA = process.env.MOXFIELD_USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Deckbit/0.1";
+const UA = process.env.MOXFIELD_USER_AGENT || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BulkBrew/0.1";
 
 type Card = ReferenceDeck["cards"][number];
 

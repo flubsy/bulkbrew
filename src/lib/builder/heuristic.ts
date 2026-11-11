@@ -13,6 +13,11 @@ export interface EdhrecContext {
   commanderDecks: number | null;
   commanderName?: string;
   tagLabel?: string;
+  /** Same tag across ALL commanders in these colours (e.g. every Grixis spellslinger deck). */
+  archetype?: EdhrecCard[];
+  archetypeLabel?: string;
+  /** Release date of the commander's printing: cards newer than it are under-counted by EDHREC. */
+  commanderReleased?: string;
 }
 
 export const EMPTY_EDHREC: EdhrecContext = { cards: [], averageDeck: [], commanderDecks: null };
@@ -20,6 +25,9 @@ export const EMPTY_EDHREC: EdhrecContext = { cards: [], averageDeck: [], command
 /** The raw facts behind a card's score — used to write human-readable reasons without AI. */
 export interface CardFacts {
   edhrec?: EdhrecCard;
+  /** Inclusion after correcting for decks built before the card existed. */
+  adjustedInclusion?: number;
+  archetype?: EdhrecCard;
   inAverageDeck: boolean;
   themes: string[]; // human labels of matched themes
   tribe?: "lord" | "member" | "payoff";
@@ -57,7 +65,7 @@ export function formatMeta(f: BuildOptions["format"]) {
 }
 
 /** Collapse owned printings into one pool entry per card name. */
-export function buildPool(owned: { card?: CardData; quantity: number; setCode?: string }[]): PoolCard[] {
+export function buildPool(owned: { card?: CardData; quantity: number; sets?: string[] }[]): PoolCard[] {
   const map = new Map<string, PoolCard>();
   for (const o of owned) {
     if (!o.card) continue;
@@ -67,9 +75,9 @@ export function buildPool(owned: { card?: CardData; quantity: number; setCode?: 
     if (p) {
       p.owned += o.quantity;
       if (price !== null && (p.priceUsd === null || price < p.priceUsd)) p.priceUsd = price;
-      if (o.card.setCode && !p.sets.includes(o.card.setCode)) p.sets.push(o.card.setCode);
+      for (const s of o.sets ?? [o.card.setCode]) if (s && !p.sets.includes(s)) p.sets.push(s);
     } else {
-      map.set(key, { card: o.card, owned: o.quantity, priceUsd: price, sets: o.card.setCode ? [o.card.setCode] : [] });
+      map.set(key, { card: o.card, owned: o.quantity, priceUsd: price, sets: (o.sets ?? [o.card.setCode]).filter(Boolean) });
     }
   }
   return [...map.values()];
@@ -117,6 +125,8 @@ const SECTION_WEIGHT: Record<string, { mult: number; bonus: number; note?: strin
 export function makeScorer(opts: BuildOptions, refs: ReferenceDeck[], commanders: CardData[], ed: EdhrecContext = EMPTY_EDHREC) {
   const edhrecByName = new Map(ed.cards.map((e) => [e.name.toLowerCase(), e] as const));
   const avg = new Set(ed.averageDeck.map((n) => n.toLowerCase()));
+  const archetypeByName = new Map((ed.archetype ?? []).map((e) => [e.name.toLowerCase(), e] as const));
+  const cmdReleased = ed.commanderReleased ? Date.parse(ed.commanderReleased) : NaN;
   const meta = formatMeta(opts.format);
   const identity = new Set<Color>();
   if (meta.singleton && commanders.length) {
@@ -216,10 +226,34 @@ export function makeScorer(opts: BuildOptions, refs: ReferenceDeck[], commanders
     if (er) {
       facts.edhrec = er;
       const w = SECTION_WEIGHT[er.label ?? ""] ?? { mult: 1, bonus: 0 };
-      const s = ((er.synergy ?? 0) * 6 + (er.inclusion ?? 0) * 6 + 1.5) * w.mult + w.bonus;
+      // EDHREC divides by every deck for this commander, including decks built before the card
+      // was printed. For cards newer than the commander, scale inclusion up (capped at ×2).
+      let incl = er.inclusion ?? 0;
+      const released = c.releasedAt ? Date.parse(c.releasedAt) : NaN;
+      if (incl && Number.isFinite(released) && Number.isFinite(cmdReleased) && released > cmdReleased) {
+        const now = Date.now();
+        const lifeCmd = Math.max(1, now - cmdReleased);
+        const lifeCard = Math.max(30 * 86400_000, now - released);
+        const factor = Math.min(2, lifeCmd / lifeCard);
+        if (factor > 1.15) {
+          incl = Math.min(1, incl * factor);
+          facts.adjustedInclusion = incl;
+        }
+      }
+      const s = ((er.synergy ?? 0) * 6 + incl * 6 + 1.5) * w.mult + w.bonus;
       score += s;
       reasons.push(er.inclusion !== undefined ? `EDHREC ${Math.round(er.inclusion * 100)}%` : `EDHREC ${er.label ?? "pick"}`);
     }
+    // Archetype-wide: how this card does in ALL decks of this tag + colours, whatever the commander.
+    // Smaller weight than the commander page, but it rescues strong cards one commander's page under-rates.
+    const ar = archetypeByName.get(lname);
+    if (ar) {
+      facts.archetype = ar;
+      const a = Math.max(0, (ar.synergy ?? 0) * 8 + (ar.inclusion ?? 0) * 6);
+      score += Math.min(5, a);
+      if (a >= 1.5) reasons.push(`archetype ${Math.round((ar.inclusion ?? 0) * 100)}%`);
+    }
+
     // EDHREC average deck: the single strongest "people actually play this here" signal.
     if (avg.has(lname)) {
       facts.inAverageDeck = true;
@@ -292,7 +326,9 @@ export function describe(c: Candidate, ed: EdhrecContext = EMPTY_EDHREC): string
   const section = SECTION_WEIGHT[f.edhrec?.label ?? ""]?.note;
   if (f.edhrec?.inclusion !== undefined && ed.commanderName) bits.push(`in ${Math.round(f.edhrec.inclusion * 100)}% of ${ed.commanderName} decks${section ? ` (${section})` : ""}`);
   else if (f.edhrec) bits.push(section ? `EDHREC ${section}` : "EDHREC recommends it");
+  if (f.adjustedInclusion !== undefined) bits.push(`newer card: ~${Math.round(f.adjustedInclusion * 100)}% of decks built since it came out`);
   if (f.inAverageDeck && !f.edhrec) bits.push("in EDHREC's average deck");
+  if (f.archetype && (f.archetype.synergy ?? 0) >= 0.08 && ed.archetypeLabel) bits.push(`strong in ${ed.archetypeLabel} decks generally (+${Math.round((f.archetype.synergy ?? 0) * 100)}% synergy)`);
   if (f.tribe === "lord") bits.push("tribal lord");
   else if (f.tribe === "member") bits.push(`on-tribe`);
   else if (f.tribe === "payoff") bits.push("tribal payoff");

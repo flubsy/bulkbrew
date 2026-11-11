@@ -7,7 +7,7 @@ import { comboKey, type DeckProfile, type EdhrecCard, type EdhrecTag } from "./t
  * empty data and the builder carries on with its other signals.
  */
 
-const UA = "Deckbit/0.1 (collection deck builder)";
+const UA = "BulkBrew/0.1 (collection deck builder)";
 
 export function edhrecSlug(name: string): string {
   return name
@@ -131,9 +131,25 @@ export async function edhrecCommander(commander: string, partner?: string, tag?:
   };
 }
 
+/**
+ * Tag page across ALL commanders (e.g. every Grixis "spellslinger" deck), optionally narrowed to a
+ * colour identity. This is the "how good is this card in this kind of deck" signal, independent of
+ * the commander — it catches strong cards a single commander's page under-rates.
+ */
+export async function edhrecForTag(tag: string, ci?: readonly string[]): Promise<EdhrecCard[]> {
+  if (ci) {
+    const slug = COLOR_SLUG[comboKey(ci)];
+    if (slug) {
+      const scoped = flatten(await getPage<CommanderJson>(`tags/${tag}/${slug}`));
+      if (scoped.length) return scoped;
+    }
+  }
+  return flatten(await getPage<CommanderJson>(`tags/${tag}`));
+}
+
 /** Theme page without a commander (e.g. "tokens") — top cards across all decks of that theme. */
-export async function edhrecForTheme(theme: string): Promise<EdhrecCard[]> {
-  return flatten(await getPage<CommanderJson>(`themes/${theme}`));
+export async function edhrecForTheme(theme: string, ci?: readonly string[]): Promise<EdhrecCard[]> {
+  return edhrecForTag(theme, ci);
 }
 
 /* ----------------------------- Commander popularity ----------------------------- */

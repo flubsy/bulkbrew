@@ -1,7 +1,7 @@
 import type { ThemeId } from "./types";
 
 /**
- * Map EDHREC's deck tags (what players label their decks with) onto Deckbit's themes.
+ * Map EDHREC's deck tags (what players label their decks with) onto BulkBrew's themes.
  * Tribal tags ("dragons", "elves") are matched against real creature types.
  * Tags with no theme equivalent (e.g. "treasure", "flying") are still used: they narrow the
  * EDHREC data the builder pulls (cards played in decks with that tag).

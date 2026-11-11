@@ -2,7 +2,7 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useRef, useState } from "react";
-import { db, exportBackup, importBackup, type Backup } from "@/lib/db";
+import { clearSynced, db, exportBackup, importBackup, type Backup } from "@/lib/db";
 import { download } from "@/lib/export";
 import { mergeRows, parseCollectionText, rowKey } from "@/lib/csv";
 import { ColorIdentity } from "./mana";
@@ -111,7 +111,7 @@ export function CollectionManager() {
 
   async function backup() {
     const b = await exportBackup();
-    download(`deckbit-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(b), "application/json");
+    download(`bulkbrew-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(b), "application/json");
   }
 
   async function restore(file: File) {
@@ -127,7 +127,7 @@ export function CollectionManager() {
 
   async function clearAll() {
     if (!confirm("Delete your whole collection from this browser?")) return;
-    await db.owned.clear();
+    await clearSynced("owned");
     setPhase({ kind: "idle" });
   }
 

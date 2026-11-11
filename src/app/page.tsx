@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BOAT, CASTLE, DRAGON, LEVIATHAN, MOON, Sprite, SWORD, TOME, WIZARD } from "@/components/sprites";
+import { CASTLE, DRAGON, LEVIATHAN, MOON, Sprite, SWORD, TENTACLE, TOME, WIZARD } from "@/components/sprites";
 import { HomeStats } from "@/components/home-stats";
 
 export default function Home() {
@@ -25,7 +25,7 @@ export default function Home() {
             <span className="text-orange">The best deck it can be.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-[21px] text-cream-dim">
-            Import your collection, pick a commander, a theme, a bracket and a budget. Deckbit scores every card you own against EDHREC and the decks people actually play, builds the strongest list, and lets Claude tighten it.
+            Import your collection, pick a commander, a theme, a bracket and a budget. BulkBrew scores every card you own against EDHREC and the decks people actually play, builds the strongest list, and lets Claude tighten it.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link href="/collection" className="px-btn inline-block">
@@ -66,8 +66,12 @@ export default function Home() {
             <Sprite grid={LEVIATHAN} scale={3} className="md:hidden" />
             <Sprite grid={LEVIATHAN} scale={5} className="hidden md:block" />
           </div>
-          <div className="bob absolute bottom-12 left-1/2 -translate-x-1/2 md:left-[45%]" style={{ animationDelay: "1.2s" }}>
-            <Sprite grid={BOAT} scale={4} />
+          {/* Kraken tentacles breaking the surface, bobbing out of step with the leviathan. */}
+          <div className="bob absolute bottom-6 left-[38%] md:left-[42%]" style={{ animationDelay: "0.8s" }}>
+            <Sprite grid={TENTACLE} scale={4} />
+          </div>
+          <div className="bob absolute bottom-4 left-[46%] md:left-[49%]" style={{ animationDelay: "1.6s" }}>
+            <Sprite grid={TENTACLE} scale={3} style={{ transform: "scaleX(-1)" }} />
           </div>
         </div>
       </section>

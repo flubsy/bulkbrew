@@ -7,6 +7,7 @@ import { BRACKETS, FORMATS, type BuiltDeck, type Color, type DeckEntry, type Edh
 import { previewProps, useCardPreview } from "./card-preview";
 import { ManaCost, ManaSymbol } from "./mana";
 import { PowerMeter } from "./power-meter";
+import { PrimerView } from "./primer-view";
 import { ComboList, UpgradeSummaryView } from "./upgrade-summary";
 import { Button, Disclosure, Input, Notice, Panel } from "./ui";
 
@@ -137,6 +138,8 @@ export function DeckView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d: B
       </Panel>
 
       {deck.upgrade && <UpgradeSummaryView deck={deck} />}
+
+      <PrimerView deck={deck} onChange={onChange} />
 
       {deck.combos && deck.combos.length > 0 && (
         <Disclosure summary={`Combos in this deck (${deck.combos.length})`}>

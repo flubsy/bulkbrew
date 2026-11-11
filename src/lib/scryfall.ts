@@ -6,7 +6,7 @@ import type { CardData, Color } from "./types";
  */
 
 export const SCRYFALL_HEADERS = {
-  "User-Agent": "Deckbit/0.1 (collection deck builder; local app)",
+  "User-Agent": "BulkBrew/0.1 (collection deck builder; local app)",
   Accept: "application/json",
 };
 
@@ -125,3 +125,26 @@ export function manaPips(manaCost: string): Record<Color, number> {
 export const BASIC_LANDS: Record<Color, string> = { W: "Plains", U: "Island", B: "Swamp", R: "Mountain", G: "Forest" };
 export const BASIC_NAMES = new Set([...Object.values(BASIC_LANDS), "Wastes", "Snow-Covered Plains", "Snow-Covered Island", "Snow-Covered Swamp", "Snow-Covered Mountain", "Snow-Covered Forest"]);
 export const isBasic = (name: string) => BASIC_NAMES.has(name);
+
+/**
+ * Scryfall image URL from a card id. The ?timestamp Scryfall appends is only cache-busting, so the
+ * bare path works. Lets the client skip sending image URLs with every card.
+ */
+export function scryfallImage(id: string, size: "small" | "normal"): string {
+  return `https://cards.scryfall.io/${size}/front/${id[0]}/${id[1]}/${id}.jpg`;
+}
+
+/** Fill in missing image URLs on every entry of a built deck (commanders, list, bench, swaps). */
+export function withImages<T extends { commanders: DeckEntryLike[]; cards: DeckEntryLike[]; alternatives?: DeckEntryLike[]; upgrade?: { swaps: { in: DeckEntryLike; out: DeckEntryLike }[] } }>(deck: T): T {
+  const fix = (e: DeckEntryLike) => {
+    if (e.scryfallId && !e.imageSmall) e.imageSmall = scryfallImage(e.scryfallId, "small");
+    if (e.scryfallId && !e.imageNormal) e.imageNormal = scryfallImage(e.scryfallId, "normal");
+  };
+  deck.commanders.forEach(fix);
+  deck.cards.forEach(fix);
+  deck.alternatives?.forEach(fix);
+  deck.upgrade?.swaps.forEach((sw) => { fix(sw.in); fix(sw.out); });
+  return deck;
+}
+
+type DeckEntryLike = { scryfallId?: string; imageSmall?: string; imageNormal?: string };

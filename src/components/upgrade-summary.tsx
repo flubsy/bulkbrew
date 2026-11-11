@@ -14,7 +14,7 @@ const ROLE_LABEL: Record<string, string> = {
 /** Plain-text swap summary for Discord / notes / Moxfield comments. */
 export function swapSummaryText(deck: BuiltDeck): string {
   const u = deck.upgrade!;
-  const lines = [`${u.originalName}: ${u.swaps.length} swaps from my collection (Deckbit)`, ""];
+  const lines = [`${u.originalName}: ${u.swaps.length} swaps from my collection (BulkBrew)`, ""];
   for (const c of u.forcedCuts) lines.push(`CUT ${c.name}: ${c.why}`);
   for (const s of u.swaps) {
     lines.push(`OUT ${s.out.name}  →  IN ${s.in.name}`);

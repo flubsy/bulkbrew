@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { creatureTypes } from "@/lib/builder/classify";
 import { suggestCommanders } from "@/lib/builder/commanders";
 import { db } from "@/lib/db";
+import { packCollection, postJson } from "@/lib/payload";
 import { BRACKETS, COLOR_COMBOS, FORMATS, THEMES, type BuildOptions, type BuiltDeck, type Color } from "@/lib/types";
 import { CardPreviewProvider } from "./card-preview";
 import { CommanderPicker } from "./commander-picker";
@@ -129,13 +130,7 @@ function DeckBuilderInner() {
     const selectedRefs = (refs ?? []).filter((r) => options.referenceDeckIds.includes(r.id));
     setBusy(options.useAI ? "Scoring your collection, pulling EDHREC, then asking Claude to tune the list… (30–120s)" : "Scoring your collection against EDHREC and checking combos…");
     try {
-      const res = await fetch("/api/build", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ options, owned: enriched.map((c) => ({ card: c.card, quantity: c.quantity })), refs: selectedRefs }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const json = await postJson<{ deck: BuiltDeck; aiAvailable: boolean }>("/api/build", { options, owned: packCollection(enriched, options.format), refs: selectedRefs });
       const built: BuiltDeck = json.deck;
       setAiAvailable(json.aiAvailable);
       setDeck(built);
@@ -217,7 +212,7 @@ function DeckBuilderInner() {
 
         {isEdh && (
           <>
-            <CommanderPicker cards={cards} opts={opts} setOpts={setOpts} knownTypes={knownTypes} tribes={tribes} onRolledBuild={(o) => build(o)} />
+            <CommanderPicker cards={cards} opts={opts} setOpts={setOpts} knownTypes={knownTypes} />
             {partnerable.length > 0 && (
               <Panel title="Partner / background">
                 <Select value={opts.partner ?? ""} onChange={(e) => setOpts((o) => ({ ...o, partner: e.target.value || undefined }))} aria-label="Partner">

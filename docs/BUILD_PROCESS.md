@@ -1,4 +1,4 @@
-# How Deckbit builds and upgrades decks
+# How BulkBrew builds and upgrades decks
 
 **Short version:** the engine is rules-based. Every build and upgrade runs on free public data (your collection, Scryfall, EDHREC, Commander Spellbook) plus the scoring and filling logic in `src/lib/builder/`. Claude is an optional extra pass that is **off by default**, and so far it has never run on this install (no API key is set). Friends can use the app without it costing anything.
 
