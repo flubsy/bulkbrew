@@ -320,6 +320,8 @@ export interface PowerRating {
   score: number; // 1..10
   label: string;
   factors: { label: string; value: string; points: number }[];
+  /** The ceiling that held the score down, if any (e.g. "Capped at 7: no combos…"). */
+  caps?: string[];
 }
 
 export interface WishlistItem {

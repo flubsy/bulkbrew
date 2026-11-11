@@ -37,7 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <main className="pb-tabbar mx-auto w-full max-w-6xl flex-1 px-4">{children}</main>
         </SyncProvider>
         <footer className="hidden border-t-4 border-navy-600 py-6 text-center text-[15px] text-muted md:block">
-          Card data and prices from Scryfall. BulkBrew is unofficial Fan Content permitted under the Fan Content Policy. Not approved or endorsed by Wizards.
+          <a href="/faq" className="text-orange underline underline-offset-4">How BulkBrew works</a> · Card data and prices from Scryfall. BulkBrew is unofficial Fan Content permitted under the Fan Content Policy. Not approved or endorsed by Wizards.
         </footer>
       </body>
     </html>

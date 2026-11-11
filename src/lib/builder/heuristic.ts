@@ -625,8 +625,7 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
     .slice(0, 40);
 
   const stats = computeStats(picked, cmdEntries, bracket, gcUsed);
-  const rankByName = new Map(pool.map((p) => [p.card.name, p.card.edhrecRank] as const));
-  stats.power = ratePower({ cards: picked, commanders: cmdEntries, stats, options: opts }, rankByName);
+  stats.power = ratePower({ cards: picked, commanders: cmdEntries, stats, options: opts });
 
   const deck: BuiltDeck = {
     id: `build_${Date.now().toString(36)}`,

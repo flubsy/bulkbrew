@@ -184,7 +184,7 @@ Improve this deck with swaps from BENCH only. Then write the summary.`;
   const swappedOut = applied.map((s) => deck.cards.find((c) => c.name.toLowerCase() === s.out.toLowerCase())).filter((c): c is DeckEntry => !!c && !inNow.has(c.name));
   const alternatives = [...swappedOut.map((c) => ({ ...c, reason: `AI cut: ${applied.find((s) => s.out.toLowerCase() === c.name.toLowerCase())?.why ?? ""}` })), ...deck.alternatives.filter((a) => !inNow.has(a.name))].slice(0, 60);
   const stats = computeStats(cards, deck.commanders, opts.bracket ?? 3, gcUsed);
-  stats.power = ratePower({ cards, commanders: deck.commanders, stats, options: opts }, new Map(candidates.map((c) => [c.card.name, c.card.edhrecRank] as const)));
+  stats.power = ratePower({ cards, commanders: deck.commanders, stats, options: opts }, { combos: deck.combos });
 
   return {
     ...deck,

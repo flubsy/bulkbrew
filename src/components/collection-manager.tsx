@@ -4,110 +4,21 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useRef, useState } from "react";
 import { clearSynced, db, exportBackup, importBackup, type Backup } from "@/lib/db";
 import { download } from "@/lib/export";
-import { mergeRows, parseCollectionText, rowKey } from "@/lib/csv";
 import { ColorIdentity } from "./mana";
+import { useCollectionImport } from "./use-collection-import";
 import { comboName } from "@/lib/types";
-import { keyOf, type Identifier } from "@/lib/scryfall";
-import type { CardData, CollectionRow, OwnedCard } from "@/lib/types";
 import { Button, Input, Label, ManaCost, Notice, Panel, Progress, Select, TextArea } from "./ui";
 
-type Phase = { kind: "idle" } | { kind: "parsing" } | { kind: "enriching"; done: number; total: number } | { kind: "done"; added: number; missing: string[] } | { kind: "error"; message: string };
 
 export function CollectionManager() {
-  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [pasted, setPasted] = useState("");
-  const [detected, setDetected] = useState<string>("");
+  const { phase, setPhase, detected, importText, importFile: handleFile } = useCollectionImport();
   const fileRef = useRef<HTMLInputElement>(null);
   const owned = useLiveQuery(() => db.owned.orderBy("name").toArray(), []);
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [colorFilter, setColorFilter] = useState("");
   const [sort, setSort] = useState<"name" | "price" | "qty" | "cmc">("name");
-
-  async function handleFile(file: File) {
-    setPhase({ kind: "parsing" });
-    try {
-      let text: string;
-      if (/\.(xlsx|xlsm|xls)$/i.test(file.name)) {
-        const XLSX = await import("xlsx");
-        const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        text = XLSX.utils.sheet_to_csv(sheet);
-      } else {
-        text = await file.text();
-      }
-      await importText(text);
-    } catch (e) {
-      setPhase({ kind: "error", message: e instanceof Error ? e.message : "Import failed" });
-    }
-  }
-
-  async function importText(text: string) {
-    setPhase({ kind: "parsing" });
-    const parsed = parseCollectionText(text);
-    setDetected(parsed.detectedAs);
-    if (!parsed.rows.length) {
-      setPhase({ kind: "error", message: "No cards found. Check the file has a name column (or lines like '4 Lightning Bolt')." });
-      return;
-    }
-    const rows = mergeRows(parsed.rows);
-    await enrichAndStore(rows);
-  }
-
-  async function enrichAndStore(rows: CollectionRow[]) {
-    const total = rows.length;
-    setPhase({ kind: "enriching", done: 0, total });
-    const missing: string[] = [];
-    const now = Date.now();
-    const CHUNK = 75;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const chunk = rows.slice(i, i + CHUNK);
-      const identifiers: Identifier[] = chunk.map(toIdentifier);
-      let cards: Record<string, CardData> = {};
-      try {
-        const res = await fetch("/api/scryfall", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifiers }) });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-        cards = json.cards;
-      } catch (e) {
-        setPhase({ kind: "error", message: `Scryfall lookup failed: ${e instanceof Error ? e.message : "unknown"}` });
-        return;
-      }
-      // Fallback: rows that failed with set+number get a second try by name only.
-      const retry: { row: CollectionRow; ident: Identifier }[] = [];
-      const entries: OwnedCard[] = [];
-      chunk.forEach((row, j) => {
-        const k = keyOf(identifiers[j]);
-        const card = cards[k];
-        if (card) entries.push(toOwned(row, card, now));
-        else if (!("name" in identifiers[j]) || "set" in identifiers[j]) retry.push({ row, ident: { name: row.name } });
-        else { missing.push(row.name); entries.push(toOwned(row, undefined, now, "not found on Scryfall")); }
-      });
-      if (retry.length) {
-        try {
-          const res = await fetch("/api/scryfall", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifiers: retry.map((r) => r.ident) }) });
-          const json = await res.json();
-          for (const { row, ident } of retry) {
-            const card: CardData | undefined = json.cards?.[keyOf(ident)];
-            if (card) entries.push(toOwned(row, card, now));
-            else { missing.push(row.name); entries.push(toOwned(row, undefined, now, "not found on Scryfall")); }
-          }
-        } catch {
-          for (const { row } of retry) { missing.push(row.name); entries.push(toOwned(row, undefined, now, "lookup failed")); }
-        }
-      }
-      // Merge with existing quantities for the same key.
-      await db.transaction("rw", db.owned, async () => {
-        for (const e of entries) {
-          const existing = await db.owned.get(e.id);
-          if (existing) await db.owned.put({ ...existing, ...e, quantity: existing.quantity + e.quantity, card: e.card ?? existing.card });
-          else await db.owned.put(e);
-        }
-      });
-      setPhase({ kind: "enriching", done: Math.min(total, i + CHUNK), total });
-    }
-    setPhase({ kind: "done", added: rows.length, missing });
-  }
 
   async function backup() {
     const b = await exportBackup();
@@ -283,7 +194,7 @@ export function CollectionManager() {
                         {!c.card && <span className="ml-2 text-[14px] text-muted">({c.enrichError})</span>}
                       </td>
                       <td><ManaCost cost={c.card?.manaCost ?? ""} /></td>
-                      <td>{c.card && <ColorIdentity ci={c.card.colorIdentity} size={14} label={comboName(c.card.colorIdentity)} />}</td>
+                      <td>{c.card && <ColorIdentity ci={c.card.colorIdentity} size={16} label={comboName(c.card.colorIdentity)} />}</td>
                       <td className="text-cream-dim">{c.card?.typeLine ?? "—"}</td>
                       <td className="uppercase text-muted">{c.card?.setCode ?? c.setCode ?? ""}</td>
                       <td className="text-right text-cream-dim">{c.card?.priceUsd != null ? c.card.priceUsd.toFixed(2) : "—"}</td>
@@ -307,15 +218,4 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       <div className="font-pixel text-[18px] text-cream">{value}</div>
     </div>
   );
-}
-
-function toIdentifier(r: CollectionRow): Identifier {
-  if (r.scryfallId) return { id: r.scryfallId };
-  if (r.setCode && r.collectorNumber) return { set: r.setCode, collector_number: r.collectorNumber };
-  if (r.setCode) return { name: r.name, set: r.setCode };
-  return { name: r.name };
-}
-
-function toOwned(row: CollectionRow, card: CardData | undefined, now: number, err?: string): OwnedCard {
-  return { ...row, id: card?.scryfallId ?? rowKey(row), card, enrichError: err, importedAt: now };
 }

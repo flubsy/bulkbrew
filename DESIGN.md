@@ -35,8 +35,10 @@ Orange is rationed: one primary button per view, section headings, active chips.
 - `.px-input` — navy-900 field, orange border on focus.
 - `.px-progress` — striped orange fill, stepped transition.
 - Sprites: `src/components/sprites.tsx` renders string grids as crisp SVG rects: castle, dragon, wizard, leviathan, kraken tentacle, moon, tome, sword, die, anvil, and 11×11 nav icons. No boats. Follow `.claude/skills/pixel-art-skill`.
-- Mana symbols: `src/components/mana.tsx` holds 9×9 pixel glyphs (sun, drop, skull, flame, tree, diamond), never coloured squares.
-- App icon: `scripts/build-icons.mjs` renders the 16×16 card-and-gem grid to PNGs (192/512, maskable) and `icon.svg`. Run it with `npm run icons`.
+- Mana symbols: `src/components/mana.tsx` draws Magic's own symbol language on a 16×16 grid: discs in the official symbol colours (W #fffbd5, U #aae0fa, B #cbc2bf, R #f9aa8f, G #9bd3ae, C/generic #ccc2c0), black glyphs (sun, drop, skull, fireball, tree, hollow diamond, Phyrexian, snow) and a one-pixel navy drop shadow down-left. Generic costs use a grey disc with a bold Pixelify numeral. Shown only at 16 or 32 px so art pixels stay square. Never coloured squares.
+- App icon: a hand-drawn 24×24 cauldron (moonlit iron, orange brew, a card rising out, fire beneath) in `scripts/build-icons.mjs`. It renders PNGs (192/512, maskable with a 15% safe pad, Apple 180) and `icon.svg`, with provenance embedded. Run it with `npm run icons`. The nav uses the 11×11 `ICON_CAULDRON` sprite.
+- Hero scene: `src/components/pixel/` holds a tiny screen engine (`screen.ts`) and the courtyard (`brew-scene.ts`): 200×120 art pixels at 10 fps, moonlight from the upper left and firelight from below quantised to four-tone ramps. It's drawn into a canvas at the largest integer scale (`brew-canvas.tsx`), and narrow screens crop to the cauldron rather than shrinking. It pauses off-screen and shows a still frame under reduced motion.
+- Big numerals: `pixel/pixel-number.tsx` is a 5×7 bitmap face with a lit top edge and a shaded bottom row. The text stays in the DOM.
 
 ## Motion
 Stepped only (`steps()`), never eased. Twinkle, sea shimmer, cursor blink, the dragon flying across the hero, and the bob of the leviathan and tentacles. All are off under `prefers-reduced-motion`.

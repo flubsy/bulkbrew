@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { PowerRating } from "@/lib/types";
 
 export function PowerMeter({ power, detail = false }: { power: PowerRating; detail?: boolean }) {
@@ -28,6 +29,12 @@ export function PowerMeter({ power, detail = false }: { power: PowerRating; deta
             </li>
           ))}
         </ul>
+      )}
+      {detail && power.caps?.length ? <p className="mt-3 text-[15px] text-gold">{power.caps[0]}</p> : null}
+      {detail && (
+        <p className="mt-2 text-[14px] text-muted">
+          Power is speed and consistency, not the bracket. <Link href="/faq#power" className="text-orange underline underline-offset-4">How is this calculated?</Link>
+        </p>
       )}
     </div>
   );

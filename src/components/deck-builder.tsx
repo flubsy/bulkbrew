@@ -169,7 +169,7 @@ function DeckBuilderInner() {
               <div className="flex flex-wrap gap-1">
                 {(["W", "U", "B", "R", "G"] as Color[]).map((c) => (
                   <Chip key={c} pressed={(opts.colors ?? []).includes(c)} onClick={() => toggle("colors", c)} title={COLOR_COMBOS[c]}>
-                    <ManaSymbol sym={c} size={18} /> {COLOR_COMBOS[c].replace("Mono-", "")}
+                    <ManaSymbol sym={c} size={16} /> {COLOR_COMBOS[c].replace("Mono-", "")}
                   </Chip>
                 ))}
               </div>

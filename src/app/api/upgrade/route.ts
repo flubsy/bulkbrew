@@ -1,6 +1,7 @@
 import { readJson } from "@/lib/read-body";
 import { withImages } from "@/lib/scryfall";
 import { buildPool } from "@/lib/builder/heuristic";
+import { ratePower } from "@/lib/builder/power";
 import { buildPrimer } from "@/lib/builder/primer";
 import { comboSuggestions, upgradeDeck, type UpgradeOptions } from "@/lib/builder/upgrade";
 import { edhrecContextFor } from "@/lib/edhrec-context";
@@ -108,6 +109,8 @@ export async function POST(req: Request) {
   }
 
   if (!ed.cards.length && build.useEdhrec) result.warnings.push("EDHREC had nothing for this commander (or was unreachable), so swaps are based on card quality and theme only.");
+  result.stats.power = ratePower(result, { combos: result.combos });
+  if (result.upgrade) result.upgrade.after.power = result.stats.power;
   result.primer = buildPrimer(result, commanders, ed.tagLabel);
   if (body.explainOnly) {
     result.upgrade = undefined;

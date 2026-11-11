@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { AccountButton } from "./account-button";
-import { CARD, ICON_ANVIL, ICON_CARDS, ICON_CHEST, ICON_DIE, ICON_HOME, ICON_SWORD, Sprite } from "./sprites";
+import { ICON_ANVIL, ICON_CARDS, ICON_CAULDRON, ICON_CHEST, ICON_DIE, ICON_HOME, ICON_SWORD, Sprite } from "./sprites";
 
 type Tab = { href: string; label: string; short: string; icon: string[]; match?: string[] };
 
@@ -90,7 +90,7 @@ export function Nav() {
       <header className="sticky top-0 z-40 border-b-4 border-navy-600 bg-navy-800/95 backdrop-blur-[2px]">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <Link href="/" className="flex items-center gap-3">
-            <Sprite grid={CARD} scale={2} />
+            <Sprite grid={ICON_CAULDRON} scale={3} />
             <span className="font-wordmark text-[12px] text-cream">
               Bulk<span className="text-orange">Brew</span>
             </span>
