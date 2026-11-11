@@ -1,0 +1,364 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Deckbit design tokens — "night harbour" palette.
+   Navy sea, charcoal cliffs, one hot orange lamp. Everything is on a 4px grid.
+--------------------------------------------------------------------------- */
+:root {
+  --navy-900: #070c17;
+  --navy-800: #0b1324;
+  --navy-700: #111c33;
+  --navy-600: #182544;
+  --navy-500: #22315a;
+  --ink-900: #0d0f14;
+  --ink-700: #1c1f27;
+  --ink-500: #2b2f3a;
+  --line: #2a3756;
+  --line-strong: #3b4c76;
+  --cream: #f3e9d2;
+  --cream-dim: #b9b2a0;
+  --muted: #8794b3;
+  --orange: #ff5a2c;
+  --orange-hot: #ff7a4d;
+  --orange-deep: #c43d13;
+  --gold: #e9c67c;
+  --sea: #1e3a6e;
+  --sea-light: #35569a;
+  --green: #6fd08c;
+  --red: #ff5e6c;
+
+  --px: 4px;
+  --radius: 0;
+
+  --background: var(--navy-800);
+  --foreground: var(--cream);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-navy-900: var(--navy-900);
+  --color-navy-800: var(--navy-800);
+  --color-navy-700: var(--navy-700);
+  --color-navy-600: var(--navy-600);
+  --color-navy-500: var(--navy-500);
+  --color-ink-900: var(--ink-900);
+  --color-ink-700: var(--ink-700);
+  --color-ink-500: var(--ink-500);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-cream: var(--cream);
+  --color-cream-dim: var(--cream-dim);
+  --color-muted: var(--muted);
+  --color-orange: var(--orange);
+  --color-orange-hot: var(--orange-hot);
+  --color-orange-deep: var(--orange-deep);
+  --color-gold: var(--gold);
+  --color-sea: var(--sea);
+  --color-sea-light: var(--sea-light);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --font-pixel: var(--font-pixelify), monospace;
+  --font-wordmark: var(--font-press-start), monospace;
+  --font-body: var(--font-vt323), monospace;
+  --font-sans: var(--font-vt323), monospace;
+  --font-mono: var(--font-vt323), monospace;
+}
+
+html {
+  background: var(--navy-800);
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(ellipse 80% 40% at 50% -10%, #16254a 0%, transparent 60%),
+    var(--navy-800);
+  color: var(--cream);
+  font-family: var(--font-body);
+  font-size: 20px;
+  line-height: 1.2;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  image-rendering: pixelated;
+}
+
+::selection {
+  background: var(--orange);
+  color: var(--navy-900);
+}
+
+/* Headings & labels: Pixelify Sans (tall x-height, proportional — readable at 12px+). */
+.font-pixel {
+  font-family: var(--font-pixel);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+/* The hero wordmark only: chunky arcade face. */
+.font-wordmark {
+  font-family: var(--font-wordmark);
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------
+   8-bit chrome
+--------------------------------------------------------------------------- */
+
+/* A stepped "notched corner" border drawn with box-shadows. No rounded corners
+   anywhere in this app — this is the border for panels, inputs and buttons. */
+.px-border {
+  position: relative;
+  border: 0;
+  box-shadow:
+    0 calc(-1 * var(--px)) 0 0 var(--px-border-color, var(--line)),
+    0 var(--px) 0 0 var(--px-border-color, var(--line)),
+    calc(-1 * var(--px)) 0 0 0 var(--px-border-color, var(--line)),
+    var(--px) 0 0 0 var(--px-border-color, var(--line));
+  margin: var(--px);
+}
+.px-border-strong { --px-border-color: var(--line-strong); }
+.px-border-orange { --px-border-color: var(--orange); }
+.px-border-gold { --px-border-color: var(--gold); }
+
+.px-panel {
+  background: var(--navy-700);
+}
+
+/* Buttons: hard shadow that collapses on press. */
+.px-btn {
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  padding: 14px 18px;
+  color: var(--navy-900);
+  background: var(--orange);
+  --px-border-color: var(--orange-deep);
+  box-shadow:
+    0 calc(-1 * var(--px)) 0 0 var(--px-border-color),
+    0 var(--px) 0 0 var(--px-border-color),
+    calc(-1 * var(--px)) 0 0 0 var(--px-border-color),
+    var(--px) 0 0 0 var(--px-border-color),
+    var(--px) calc(2 * var(--px)) 0 0 var(--navy-900),
+    calc(2 * var(--px)) var(--px) 0 0 var(--navy-900);
+  margin: var(--px) calc(2 * var(--px)) calc(2 * var(--px)) var(--px);
+  cursor: pointer;
+  user-select: none;
+  transition: none;
+}
+.px-btn:hover { background: var(--orange-hot); }
+.px-btn:active {
+  transform: translate(var(--px), var(--px));
+  box-shadow:
+    0 calc(-1 * var(--px)) 0 0 var(--px-border-color),
+    0 var(--px) 0 0 var(--px-border-color),
+    calc(-1 * var(--px)) 0 0 0 var(--px-border-color),
+    var(--px) 0 0 0 var(--px-border-color);
+}
+.px-btn:disabled {
+  background: var(--ink-500);
+  color: var(--muted);
+  --px-border-color: var(--ink-700);
+  cursor: not-allowed;
+  transform: none;
+}
+.px-btn-ghost {
+  background: var(--navy-700);
+  color: var(--cream);
+  --px-border-color: var(--line-strong);
+}
+.px-btn-ghost:hover { background: var(--navy-600); }
+.px-btn-sm { padding: 9px 12px; font-size: 12px; }
+
+/* Inputs */
+.px-input {
+  width: 100%;
+  background: var(--navy-900);
+  color: var(--cream);
+  font-family: var(--font-body);
+  font-size: 20px;
+  padding: 8px 12px;
+  outline: none;
+  --px-border-color: var(--line);
+}
+.px-input:focus { --px-border-color: var(--orange); }
+.px-input::placeholder { color: var(--muted); }
+select.px-input { appearance: none; padding-right: 36px; background-image: linear-gradient(45deg, transparent 50%, var(--orange) 50%), linear-gradient(135deg, var(--orange) 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 12px) 50%; background-size: 8px 8px; background-repeat: no-repeat; }
+textarea.px-input { line-height: 1.15; }
+
+/* Chips (toggleable tags) */
+.px-chip {
+  font-family: var(--font-pixel);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--navy-900);
+  color: var(--cream-dim);
+  --px-border-color: var(--line);
+  cursor: pointer;
+  line-height: 1;
+  white-space: nowrap;
+}
+.px-chip:hover { color: var(--cream); --px-border-color: var(--line-strong); }
+.px-chip[aria-pressed="true"] {
+  background: var(--orange);
+  color: var(--navy-900);
+  --px-border-color: var(--orange-deep);
+}
+
+/* Labels */
+.px-label {
+  font-family: var(--font-pixel);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* Progress bar with hard steps */
+.px-progress {
+  height: 16px;
+  background: var(--navy-900);
+  --px-border-color: var(--line);
+}
+.px-progress > div {
+  height: 100%;
+  background: repeating-linear-gradient(90deg, var(--orange) 0 12px, var(--orange-hot) 12px 16px);
+  transition: width 120ms steps(4);
+}
+
+/* Scanline + vignette overlay. Pointer-events none so it never blocks taps. */
+.scanlines::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply;
+  opacity: 0.6;
+}
+
+/* Pixel star field: a handful of 4px squares via box-shadow. */
+.starfield {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: transparent;
+  box-shadow:
+    40px 24px var(--cream-dim), 120px 80px var(--muted), 220px 40px var(--cream),
+    320px 120px var(--muted), 420px 20px var(--cream-dim), 520px 96px var(--muted),
+    640px 60px var(--cream), 760px 140px var(--cream-dim), 880px 30px var(--muted),
+    980px 100px var(--cream-dim), 1100px 50px var(--muted), 1240px 130px var(--cream),
+    1340px 20px var(--cream-dim), 1440px 90px var(--muted), 60px 180px var(--muted),
+    300px 200px var(--cream-dim), 700px 210px var(--muted), 1000px 190px var(--cream-dim);
+  animation: twinkle 3s steps(2) infinite;
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.5; }
+}
+
+/* Sea shimmer: horizontal pixel rows that step sideways. */
+.sea-row {
+  height: 4px;
+  background: repeating-linear-gradient(90deg, var(--sea-light) 0 8px, transparent 8px 28px);
+  opacity: 0.5;
+  animation: shimmer 2.4s steps(6) infinite;
+}
+.sea-row:nth-child(odd) { animation-direction: reverse; opacity: 0.35; }
+@keyframes shimmer {
+  from { background-position: 0 0; }
+  to { background-position: 28px 0; }
+}
+
+/* Moonlight column under the moon. */
+.moon-path {
+  background: repeating-linear-gradient(0deg, var(--gold) 0 4px, transparent 4px 10px);
+  opacity: 0.35;
+  mask-image: linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent);
+}
+
+/* Blinking cursor for "press start" style prompts */
+.blink { animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Curve chart bars */
+.px-bar {
+  background: var(--orange);
+  box-shadow: inset 0 -4px 0 0 var(--orange-deep);
+}
+
+/* Tables */
+.px-table th {
+  font-family: var(--font-pixel);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 4px solid var(--line);
+}
+.px-table td {
+  padding: 8px;
+  border-bottom: 2px solid var(--navy-600);
+  vertical-align: top;
+}
+.px-table tr:hover td { background: var(--navy-600); }
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  .starfield, .sea-row, .blink { animation: none; }
+}
+
+/* Focus ring that fits the look */
+:focus-visible {
+  outline: 4px solid var(--orange);
+  outline-offset: 2px;
+}
+
+/* Floating card preview */
+.card-preview {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  width: 244px;
+  background: var(--navy-900);
+  --px-border-color: var(--orange);
+}
+.card-preview img { display: block; width: 100%; height: auto; image-rendering: auto; }
+
+/* Power meter: ten hard segments */
+.power-meter { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; height: 14px; }
+.power-meter > i { background: var(--navy-600); }
+.power-meter > i.on { background: var(--orange); box-shadow: inset 0 -3px 0 0 var(--orange-deep); }
+.power-meter > i.on.hot { background: var(--gold); box-shadow: inset 0 -3px 0 0 #a8863f; }
+
+/* Dragon flight across the hero */
+.fly { animation: fly 22s steps(60) infinite; }
+@keyframes fly {
+  0% { transform: translateX(-160px) translateY(0); }
+  50% { transform: translateX(55vw) translateY(-24px); }
+  100% { transform: translateX(110vw) translateY(0); }
+}
+.bob { animation: bob 3s steps(3) infinite; }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .fly, .bob { animation: none; } }
+
+/* Mobile safe-area padding for the bottom tab bar */
+.pb-tabbar { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+@media (min-width: 768px) { .pb-tabbar { padding-bottom: 48px; } }
+
