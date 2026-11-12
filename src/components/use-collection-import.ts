@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { mergeRows, parseCollectionText, rowKey } from "@/lib/csv";
+import { ownedId } from "@/lib/collection";
 import { db } from "@/lib/db";
 import { keyOf, type Identifier } from "@/lib/scryfall";
 import type { CardData, CollectionRow, OwnedCard } from "@/lib/types";
@@ -27,7 +28,7 @@ function toIdentifier(r: CollectionRow): Identifier {
 }
 
 function toOwned(row: CollectionRow, card: CardData | undefined, now: number, err?: string): OwnedCard {
-  return { ...row, id: card?.scryfallId ?? rowKey(row), card, enrichError: err, importedAt: now };
+  return { ...row, id: card ? ownedId(card.scryfallId, row.foil) : rowKey(row), card, enrichError: err, importedAt: now };
 }
 
 async function lookup(identifiers: Identifier[]): Promise<Record<string, CardData>> {

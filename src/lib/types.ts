@@ -70,6 +70,9 @@ export interface CardData {
   imageSmall?: string;
   imageNormal?: string;
   releasedAt?: string;
+  /** Printing details (added later: older rows lack them). */
+  fullArt?: boolean;
+  finishes?: string[];
 }
 
 /** A card the user owns: the row + the enrichment. Keyed by scryfallId when known. */

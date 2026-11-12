@@ -21,6 +21,7 @@ const PALETTE: Record<string, string> = {
   y: "#ffd27a",
   w: "#ffb36b",
   b: "var(--sea)",
+  x: "currentColor",
 };
 
 export function Sprite({ grid, scale = 4, className = "", title, style }: { grid: string[]; scale?: number; className?: string; title?: string; style?: React.CSSProperties }) {
@@ -377,3 +378,10 @@ export const ARROW = [
   "...oo..",
   "...o...",
 ];
+
+/* ---------- 7×7 control glyphs, drawn in the text colour (x = currentColor) ---------- */
+export const GLYPH_PLUS = ["...x...", "...x...", "...x...", "xxxxxxx", "...x...", "...x...", "...x..."];
+export const GLYPH_MINUS = [".......", ".......", ".......", "xxxxxxx", ".......", ".......", "......."];
+export const GLYPH_CROSS = ["x.....x", ".x...x.", "..x.x..", "...x...", "..x.x..", ".x...x.", "x.....x"];
+export const GLYPH_CHEVRON = [".x.....", "..x....", "...x...", "....x..", "...x...", "..x....", ".x....."];
+export const GLYPH_SWAP = ["....x..", "xxxxxx.", "....x..", ".......", "..x....", ".xxxxxx", "..x...."];

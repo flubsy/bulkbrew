@@ -116,7 +116,12 @@ async function push(sb: SupabaseClient, userId: string): Promise<number> {
     }
   }
 
-  const tombs = await db.tombstones.toArray();
+  // A row deleted and then restored (undo, re-import) is live again: drop its tombstone.
+  const tombs = [];
+  for (const t of await db.tombstones.toArray()) {
+    if (await table(t.kind).get(t.id)) await db.tombstones.delete(t.key);
+    else tombs.push(t);
+  }
   for (let i = 0; i < tombs.length; i += CHUNK) {
     const chunk = tombs.slice(i, i + CHUNK);
     const rows = chunk.map((t) => ({ user_id: userId, kind: t.kind, id: t.id, data: null, deleted: true }));
