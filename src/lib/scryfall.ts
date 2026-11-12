@@ -42,6 +42,8 @@ export type ScryfallCard = ScryfallFace & {
   edhrec_rank?: number;
   game_changer?: boolean;
   released_at?: string;
+  full_art?: boolean;
+  finishes?: string[];
   card_faces?: ScryfallFace[];
 };
 
@@ -135,6 +137,8 @@ export function normalizeCard(c: ScryfallCard): CardData {
     imageSmall: img?.small,
     imageNormal: img?.normal,
     releasedAt: c.released_at,
+    fullArt: c.full_art || undefined,
+    finishes: c.finishes,
   };
 }
 
@@ -206,3 +210,19 @@ export function withImages<T extends { commanders: DeckEntryLike[]; cards: DeckE
 }
 
 type DeckEntryLike = { scryfallId?: string; imageSmall?: string; imageNormal?: string };
+
+/** Every paper printing of a card (newest first), for the collection's "change printing" picker. */
+export async function fetchPrints(oracleId: string, maxPages = 3): Promise<CardData[]> {
+  if (!/^[0-9a-f-]{36}$/i.test(oracleId)) return [];
+  const out: CardData[] = [];
+  let url: string | undefined = `https://api.scryfall.com/cards/search?unique=prints&order=released&dir=desc&include_extras=true&q=${encodeURIComponent(`oracleid:${oracleId} game:paper`)}`;
+  for (let page = 0; url && page < maxPages; page++) {
+    const res = await fetch(url, { headers: SCRYFALL_HEADERS });
+    if (!res.ok) break;
+    const j = (await res.json()) as { data?: ScryfallCard[]; has_more?: boolean; next_page?: string };
+    out.push(...(j.data ?? []).map(normalizeCard));
+    url = j.has_more ? j.next_page : undefined;
+    if (url) await sleep(100);
+  }
+  return out;
+}

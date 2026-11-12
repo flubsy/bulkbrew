@@ -4,11 +4,12 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useRef, useState } from "react";
 import { clearSynced, db, exportBackup, importBackup, type Backup } from "@/lib/db";
 import { download } from "@/lib/export";
-import { ColorIdentity } from "./mana";
+import { groupOwned, isStaple, STAPLE_RANK } from "@/lib/collection";
+import { isCommanderCard } from "@/lib/builder/commanders";
+import { CollectionTable } from "./collection-table";
 import { useCollectionImport } from "./use-collection-import";
 import { useCurrency } from "./currency-provider";
-import { comboName } from "@/lib/types";
-import { Button, Input, Label, ManaCost, Notice, Panel, Progress, Select, TextArea } from "./ui";
+import { Button, Chip, Input, Label, Notice, Panel, Progress, Select, TextArea } from "./ui";
 
 
 export function CollectionManager() {
@@ -19,8 +20,9 @@ export function CollectionManager() {
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [colorFilter, setColorFilter] = useState("");
-  const [sort, setSort] = useState<"name" | "price" | "qty" | "cmc">("name");
-  const { fmt, fromUsd, code } = useCurrency();
+  const [sort, setSort] = useState<"name" | "price" | "qty" | "cmc" | "popular">("name");
+  const [only, setOnly] = useState<"" | "commanders" | "staples" | "unmatched">("");
+  const { fmt } = useCurrency();
   const [priceFix, setPriceFix] = useState<string | null>(null);
 
   async function backup() {
@@ -72,30 +74,39 @@ export function CollectionManager() {
     const value = owned.reduce((s, c) => s + (c.card?.priceUsd ?? 0) * c.quantity, 0);
     const unmatched = owned.filter((c) => !c.card).length;
     const unpriced = owned.filter((c) => c.card && c.card.priceUsd == null && !/^Basic Land/.test(c.card.typeLine)).length;
-    const legendary = owned.filter((c) => /Legendary Creature|can be your commander/i.test((c.card?.typeLine ?? "") + (c.card?.oracleText ?? ""))).length;
-    return { cards, value, unmatched, unpriced, legendary };
+    const groups = groupOwned(owned);
+    const legendary = groups.filter((g) => g.card && isCommanderCard(g.card, "commander")).length;
+    return { cards, value, unmatched, unpriced, legendary, unique: groups.length };
   }, [owned]);
 
-  const filtered = useMemo(() => {
-    if (!owned) return [];
+  const { groups, basics } = useMemo(() => {
+    if (!owned) return { groups: [], basics: [] };
     const needle = q.trim().toLowerCase();
-    let list = owned.filter((c) => {
-      if (needle && !c.name.toLowerCase().includes(needle) && !(c.card?.oracleText ?? "").toLowerCase().includes(needle) && !(c.card?.typeLine ?? "").toLowerCase().includes(needle)) return false;
-      if (typeFilter && !(c.card?.typeLine ?? "").includes(typeFilter)) return false;
+    const list = groupOwned(owned).filter((g) => {
+      const c = g.card;
+      if (needle && !g.name.toLowerCase().includes(needle) && !(c?.oracleText ?? "").toLowerCase().includes(needle) && !(c?.typeLine ?? "").toLowerCase().includes(needle)) return false;
+      if (typeFilter && !(c?.typeLine ?? "").includes(typeFilter)) return false;
       if (colorFilter) {
-        const ci = c.card?.colorIdentity ?? [];
+        const ci = c?.colorIdentity ?? [];
         if (colorFilter === "C" ? ci.length !== 0 : !ci.includes(colorFilter as never)) return false;
       }
+      if (only === "commanders" && !(c && isCommanderCard(c, "commander"))) return false;
+      if (only === "staples" && !isStaple(c)) return false;
+      if (only === "unmatched" && g.rows.every((r) => r.card)) return false;
       return true;
     });
-    list = [...list].sort((a, b) => {
-      if (sort === "price") return (b.card?.priceUsd ?? 0) - (a.card?.priceUsd ?? 0);
-      if (sort === "qty") return b.quantity - a.quantity;
-      if (sort === "cmc") return (a.card?.cmc ?? 0) - (b.card?.cmc ?? 0);
+    list.sort((a, b) => {
+      if (sort === "price") return (b.priceMax ?? 0) - (a.priceMax ?? 0);
+      if (sort === "qty") return b.qty - a.qty;
+      if (sort === "cmc") return (a.card?.cmc ?? 0) - (b.card?.cmc ?? 0) || a.name.localeCompare(b.name);
+      if (sort === "popular") return (a.card?.edhrecRank ?? 1e9) - (b.card?.edhrecRank ?? 1e9);
       return a.name.localeCompare(b.name);
     });
-    return list;
-  }, [owned, q, typeFilter, colorFilter, sort]);
+    // Basic lands go behind one summary row unless the search is looking for them.
+    const wantBasics = !!needle || typeFilter === "Basic";
+    return { groups: wantBasics ? list : list.filter((g) => !g.basic), basics: wantBasics ? [] : list.filter((g) => g.basic) };
+  }, [owned, q, typeFilter, colorFilter, sort, only]);
+  const shownCount = groups.length + basics.length;
 
   return (
     <div className="mt-8 grid gap-6">
@@ -158,9 +169,9 @@ export function CollectionManager() {
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <MiniStat label="Cards" value={stats.cards.toLocaleString()} />
-            <MiniStat label="Unique" value={owned.length.toLocaleString()} />
+            <MiniStat label="Unique" value={stats.unique.toLocaleString()} />
             <MiniStat label="Value" value={fmt(stats.value, { whole: true })} />
-            <MiniStat label="Commanders" value={stats.legendary.toLocaleString()} />
+            <MiniStat label="Can be commander" value={stats.legendary.toLocaleString()} />
           </div>
           {stats.unmatched > 0 && <Notice tone="warn">{stats.unmatched} rows have no Scryfall match and will be ignored by the builder. Search for them below and check the spelling.</Notice>}
           {(stats.unpriced > 0 || priceFix) && (
@@ -171,7 +182,7 @@ export function CollectionManager() {
           )}
 
           <Panel
-            title={`Cards (${filtered.length})`}
+            title={`Cards (${shownCount})`}
             aside={
               <Button size="sm" variant="ghost" onClick={clearAll}>
                 Delete all
@@ -182,7 +193,7 @@ export function CollectionManager() {
               <Input placeholder="Search name, text, type…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search collection" />
               <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Type">
                 <option value="">Any type</option>
-                {["Creature", "Instant", "Sorcery", "Artifact", "Enchantment", "Planeswalker", "Land", "Legendary", "Battle"].map((t) => (
+                {["Creature", "Instant", "Sorcery", "Artifact", "Enchantment", "Planeswalker", "Land", "Basic", "Legendary", "Battle"].map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </Select>
@@ -200,41 +211,16 @@ export function CollectionManager() {
                 <option value="price">Sort: price</option>
                 <option value="qty">Sort: quantity</option>
                 <option value="cmc">Sort: mana value</option>
+                <option value="popular">Sort: most played (EDHREC)</option>
               </Select>
             </div>
-            <div className="mt-4 overflow-x-auto">
-              <table className="px-table w-full min-w-[640px] text-[18px]">
-                <thead>
-                  <tr>
-                    <th>Qty</th>
-                    <th>Name</th>
-                    <th>Cost</th>
-                    <th>ID</th>
-                    <th>Type</th>
-                    <th>Set</th>
-                    <th className="text-right">{code}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.slice(0, 400).map((c) => (
-                    <tr key={c.id}>
-                      <td className="text-cream-dim">{c.quantity}</td>
-                      <td>
-                        <span className={c.card ? "" : "text-orange"}>{c.name}</span>
-                        {c.card?.gameChanger && <span className="ml-2 font-pixel text-[7px] text-gold">GC</span>}
-                        {!c.card && <span className="ml-2 text-[14px] text-muted">({c.enrichError})</span>}
-                      </td>
-                      <td><ManaCost cost={c.card?.manaCost ?? ""} /></td>
-                      <td>{c.card && <ColorIdentity ci={c.card.colorIdentity} size={16} label={comboName(c.card.colorIdentity)} />}</td>
-                      <td className="text-cream-dim">{c.card?.typeLine ?? "—"}</td>
-                      <td className="uppercase text-muted">{c.card?.setCode ?? c.setCode ?? ""}</td>
-                      <td className="text-right text-cream-dim">{c.card?.priceUsd != null ? fromUsd(c.card.priceUsd).toFixed(2) : <span title="Scryfall has no price for this printing">—</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {filtered.length > 400 && <p className="mt-3 text-[16px] text-muted">Showing the first 400. Narrow the search to see more.</p>}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="px-label !mb-0 mr-1">Show only</span>
+              <Chip pressed={only === "commanders"} onClick={() => setOnly(only === "commanders" ? "" : "commanders")} title="Legendary creatures and cards that say they can be your commander">Can be your commander</Chip>
+              <Chip pressed={only === "staples"} onClick={() => setOnly(only === "staples" ? "" : "staples")} title={`Game changers and the ${STAPLE_RANK} most-played Commander cards on EDHREC`}>Staples</Chip>
+              {stats.unmatched > 0 && <Chip pressed={only === "unmatched"} onClick={() => setOnly(only === "unmatched" ? "" : "unmatched")}>No Scryfall match</Chip>}
             </div>
+            <CollectionTable groups={groups} basics={basics} />
           </Panel>
         </>
       )}
