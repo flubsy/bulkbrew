@@ -1,11 +1,11 @@
 "use client";
 
-import type { Provider } from "@supabase/supabase-js";
-import { useState } from "react";
-import { AUTH_PROVIDERS, PROVIDER_LABEL, signInWith, signInWithEmail, supabase } from "@/lib/supabase";
+import { useEffect, useState } from "react";
+import { PROVIDER_LABEL, supabase } from "@/lib/supabase";
+import { AccountSettings, AuthForms, NewPasswordForm } from "./auth-forms";
 import { deleteCloudData, wipeLocal } from "@/lib/sync";
 import { useAccount } from "./sync-provider";
-import { Button, Input, Label, Notice, Panel } from "./ui";
+import { Button, Notice, Panel } from "./ui";
 
 function ago(t?: number) {
   if (!t) return "never";
@@ -18,7 +18,15 @@ function ago(t?: number) {
 
 export function AccountPanel() {
   const acct = useAccount();
-  const [email, setEmail] = useState("");
+  const [resetting, setResetting] = useState(false);
+  // Opened from a password-reset email (/account?reset=1): the link signs you in, then you pick a new password.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (new URLSearchParams(window.location.search).get("reset") === "1") setResetting(true);
+    }, 0);
+    const sub = supabase()?.auth.onAuthStateChange((e) => { if (e === "PASSWORD_RECOVERY") setResetting(true); });
+    return () => { clearTimeout(t); sub?.data.subscription.unsubscribe(); };
+  }, []);
   const [msg, setMsg] = useState<{ tone: "ok" | "error" | "info"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -46,33 +54,13 @@ export function AccountPanel() {
   }
 
   if (!acct.user) {
-    const oauth = AUTH_PROVIDERS.filter((p) => p !== "email");
     return (
       <div className="grid gap-5 md:grid-cols-2">
-        <Panel title="Sign in">
-          <p className="text-[18px] text-cream-dim">Sign in to keep your collection, saved decks and wishlist on every device: your phone, a work PC, a friend&apos;s laptop.</p>
-          <div className="mt-4 grid gap-2">
-            {oauth.map((p) => (
-              <Button key={p} onClick={() => go(() => signInWith(p as Provider))} disabled={busy}>
-                Continue with {PROVIDER_LABEL[p] ?? p}
-              </Button>
-            ))}
-          </div>
-          {AUTH_PROVIDERS.includes("email") && (
-            <form className="mt-5" onSubmit={(e) => { e.preventDefault(); void go(() => signInWithEmail(email), `Check ${email} for a sign-in link.`); }}>
-              <Label hint="no password: we email you a link">Or use your email</Label>
-              <div className="flex gap-2">
-                <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
-                <Button type="submit" variant="ghost" disabled={busy || !email}>Send</Button>
-              </div>
-            </form>
-          )}
-          {msg && <div className="mt-4"><Notice tone={msg.tone === "info" ? "info" : msg.tone}>{msg.text}</Notice></div>}
-        </Panel>
+        <AuthForms />
         <Panel title="What gets saved">
           <ul className="grid list-disc gap-2 pl-6 text-[17px] text-cream-dim">
-            <li>Your collection, saved and upgraded decks, reference decks and wishlist.</li>
-            <li>Nothing else: no card prices you didn&apos;t import, no browsing history.</li>
+            <li>Your collection, saved and upgraded decks, reference decks and wishlist, on every device you sign in on.</li>
+            <li>Your email is only used to reset your password. No newsletters, no verification step.</li>
             <li>Only you can read your data. The database enforces it per account.</li>
             <li>Whatever&apos;s already on this device gets added to your account the first time you sign in.</li>
           </ul>
@@ -94,6 +82,8 @@ export function AccountPanel() {
         </Panel>
       )}
 
+      {resetting && <NewPasswordForm onDone={() => { setResetting(false); window.history.replaceState(null, "", "/account"); }} />}
+
       <Panel title="Account">
         <div className="flex items-center gap-4">
           {u.avatar ? (
@@ -108,6 +98,8 @@ export function AccountPanel() {
           </div>
         </div>
       </Panel>
+
+      <AccountSettings key={u.username ?? ""} username={u.username} />
 
       <Panel title="Sync">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">

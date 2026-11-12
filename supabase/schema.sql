@@ -99,3 +99,93 @@ revoke execute on function public.share_deck(jsonb, text) from public;
 revoke execute on function public.get_shared_deck(text) from public;
 grant execute on function public.share_deck(jsonb, text) to anon, authenticated;
 grant execute on function public.get_shared_deck(text) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------------------------
+-- Username + password accounts. Added Nov 2026; run this whole file again to add it.
+--
+-- Supabase stores the email and password. This adds a unique username, so people can sign in
+-- with either their username or their email. The username is only ever turned into an email
+-- AFTER the password has been checked (login_email), so nobody can look up someone's email
+-- from their username. Five wrong passwords lock that username for 15 minutes.
+--
+-- Also needed, in the dashboard: Authentication → Sign In / Providers → Email: enabled,
+-- and "Confirm email" OFF (accounts work straight away, no verification email).
+-- ---------------------------------------------------------------------------------------------
+create table if not exists public.profiles (
+  id            uuid        primary key references auth.users (id) on delete cascade,
+  username      text        not null check (username ~ '^[A-Za-z0-9_.-]{3,24}$'),
+  failed_logins integer     not null default 0,
+  locked_until  timestamptz,
+  created_at    timestamptz not null default now()
+);
+create unique index if not exists profiles_username_lower on public.profiles (lower(username));
+
+alter table public.profiles enable row level security;
+revoke all on public.profiles from anon, authenticated;
+
+-- New account with a username in its sign-up data → profile row. A taken username fails the
+-- sign-up (the app checks availability first, so this only catches a race).
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if coalesce(new.raw_user_meta_data ->> 'username', '') <> '' then
+    insert into public.profiles (id, username) values (new.id, new.raw_user_meta_data ->> 'username');
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+create or replace function public.username_available(p_username text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select p_username ~ '^[A-Za-z0-9_.-]{3,24}$'
+     and not exists (select 1 from public.profiles where lower(username) = lower(p_username));
+$$;
+
+-- Username + password → the account's email, only if the password is right (then the app signs
+-- in normally with email + password). Wrong password → null.
+create or replace function public.login_email(p_username text, p_password text) returns text
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  p public.profiles;
+  u auth.users;
+begin
+  select * into p from public.profiles where lower(username) = lower(p_username);
+  if not found then return null; end if;
+  if p.locked_until is not null and p.locked_until > now() then
+    raise exception 'Too many wrong passwords. Try again in a few minutes, or reset your password.';
+  end if;
+  select * into u from auth.users where id = p.id;
+  if coalesce(u.encrypted_password, '') like '$2%' and u.encrypted_password = crypt(p_password, u.encrypted_password) then
+    update public.profiles set failed_logins = 0, locked_until = null where id = p.id;
+    return u.email;
+  end if;
+  update public.profiles
+    set failed_logins = failed_logins + 1,
+        locked_until = case when failed_logins + 1 >= 5 then now() + interval '15 minutes' else null end
+    where id = p.id;
+  return null;
+end $$;
+
+-- Signed in: choose or change your username (e.g. accounts made with Google).
+create or replace function public.set_username(p_username text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'Sign in first'; end if;
+  if p_username !~ '^[A-Za-z0-9_.-]{3,24}$' then raise exception 'Usernames are 3–24 letters, numbers, _ . or -'; end if;
+  if exists (select 1 from public.profiles where lower(username) = lower(p_username) and id <> auth.uid()) then
+    raise exception 'That username is taken';
+  end if;
+  insert into public.profiles (id, username) values (auth.uid(), p_username)
+    on conflict (id) do update set username = excluded.username;
+end $$;
+
+revoke execute on function public.username_available(text) from public;
+revoke execute on function public.login_email(text, text) from public;
+revoke execute on function public.set_username(text) from public;
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+grant execute on function public.username_available(text) to anon, authenticated;
+grant execute on function public.login_email(text, text) to anon, authenticated;
+grant execute on function public.set_username(text) to authenticated;
