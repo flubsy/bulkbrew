@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactElement } from "react";
+import { memo, type ReactElement } from "react";
 import type { Color } from "@/lib/types";
 
 /**
@@ -40,32 +40,56 @@ const DISC_MASK: boolean[] = Array.from({ length: 256 }, (_, i) => {
   return Math.hypot(x - 7.5, y - 7.5) <= 7.45;
 });
 
-function Disc({ fill, fill2 }: { fill: string; fill2?: string }) {
-  const rects: ReactElement[] = [];
-  for (let i = 0; i < 256; i++) {
-    const x = i % 16, y = Math.floor(i / 16);
-    if (DISC_MASK[i]) {
-      const c = fill2 && x + y > 15 ? fill2 : fill; // hybrid: split along the diagonal
-      rects.push(<rect key={i} x={x} y={y} width={1} height={1} fill={c} />);
-    } else {
-      // Shadow where the disc, moved one down-left, would be.
-      const sx = x + 1, sy = y - 1;
-      if (sx >= 0 && sx < 16 && sy >= 0 && sy < 16 && DISC_MASK[sy * 16 + sx]) rects.push(<rect key={i} x={x} y={y} width={1} height={1} fill={SHADOW} />);
+/**
+ * Pixels merged into one <path> per colour (horizontal runs), cached per input. A symbol used to
+ * be ~250 <rect> nodes; a 400-row table of costs made the page crawl.
+ */
+const pathCache = new Map<string, string>();
+function runsPath(key: string, on: (x: number, y: number) => boolean, w = 16, h = 16, dx = 0, dy = 0): string {
+  const hit = pathCache.get(key);
+  if (hit !== undefined) return hit;
+  let d = "";
+  for (let y = 0; y < h; y++) {
+    let x = 0;
+    while (x < w) {
+      if (!on(x, y)) { x++; continue; }
+      const start = x;
+      while (x < w && on(x, y)) x++;
+      d += `M${start + dx} ${y + dy}h${x - start}v1h-${x - start}z`;
     }
   }
-  return <>{rects}</>;
+  pathCache.set(key, d);
+  return d;
+}
+
+const inDisc = (x: number, y: number) => DISC_MASK[y * 16 + x];
+const inShadow = (x: number, y: number) => {
+  if (inDisc(x, y)) return false;
+  const sx = x + 1, sy = y - 1;
+  return sx >= 0 && sx < 16 && sy >= 0 && sy < 16 && DISC_MASK[sy * 16 + sx];
+};
+
+function Disc({ fill, fill2 }: { fill: string; fill2?: string }) {
+  const shadow = runsPath("shadow", inShadow);
+  if (!fill2) return <><path d={shadow} fill={SHADOW} /><path d={runsPath("disc", inDisc)} fill={fill} /></>;
+  // Hybrid: split along the diagonal.
+  return (
+    <>
+      <path d={shadow} fill={SHADOW} />
+      <path d={runsPath("disc-a", (x, y) => inDisc(x, y) && x + y <= 15)} fill={fill} />
+      <path d={runsPath("disc-b", (x, y) => inDisc(x, y) && x + y > 15)} fill={fill2} />
+    </>
+  );
 }
 
 function Glyph({ g }: { g: string[] }) {
-  const rects: ReactElement[] = [];
-  g.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === "k") rects.push(<rect key={`${x}-${y}`} x={x + 3} y={y + 3} width={1} height={1} fill={INK} />); }));
-  return <>{rects}</>;
+  return <path d={runsPath(`glyph:${g.join("|")}`, (x, y) => g[y]?.[x] === "k", 10, 10, 3, 3)} fill={INK} />;
 }
 
 const NAMES: Record<string, string> = { W: "white", U: "blue", B: "black", R: "red", G: "green", C: "colorless", S: "snow", X: "X", P: "Phyrexian" };
 
 /** One mana symbol. `sym` is the inside of the braces: W, U, 2, X, W/U, 2/B, B/P, S, C… */
-export function ManaSymbol({ sym, size = 16 }: { sym: string; size?: 16 | 32 }) {
+export const ManaSymbol = memo(function ManaSymbol({ sym, size = 16 }: { sym: string; size?: 16 | 32 }) {
   const s = sym.toUpperCase();
   const parts = s.split("/");
   const coloured = parts.filter((p) => "WUBRGC".includes(p) && p.length === 1);
@@ -96,9 +120,9 @@ export function ManaSymbol({ sym, size = 16 }: { sym: string; size?: 16 | 32 }) 
       {body}
     </svg>
   );
-}
+});
 
-export function ManaCost({ cost, size = 16 }: { cost: string; size?: 16 | 32 }) {
+export const ManaCost = memo(function ManaCost({ cost, size = 16 }: { cost: string; size?: 16 | 32 }) {
   const symbols = [...cost.matchAll(/\{([^}]+)\}/g)].map((m) => m[1]);
   if (!symbols.length) return null;
   return (
@@ -108,7 +132,7 @@ export function ManaCost({ cost, size = 16 }: { cost: string; size?: 16 | 32 }) 
       ))}
     </span>
   );
-}
+});
 
 /** Colour identity as a row of symbols, with the guild/shard/wedge name on hover. */
 export function ColorIdentity({ ci, size = 16, label }: { ci: readonly string[]; size?: 16 | 32; label?: string }) {

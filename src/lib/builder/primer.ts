@@ -88,12 +88,18 @@ export function buildPrimer(deck: Pick<BuiltDeck, "cards" | "commanders" | "stat
     .map((c) => ({ name: c.name, why: c.reason }));
 
   // ---- Win conditions.
+  // One line per kind of win: every combo, then all finishers together, then big threats together.
   const winCons: Primer["winCons"] = [];
-  for (const c of combos.slice(0, 3)) winCons.push({ name: c.cards.join(" + "), how: `Combo: ${c.produces.slice(0, 2).join(", ").toLowerCase()}.` });
-  for (const c of nonLand.filter((x) => x.role === "finisher").slice(0, 3)) winCons.push({ name: c.name, how: "Finisher: cast it once the board is set up and it ends the game in a turn or two." });
+  for (const c of combos.slice(0, 2)) winCons.push({ name: c.cards.join(" + "), how: `Combo: ${c.produces.slice(0, 2).join(", ").toLowerCase()}.` });
+  const finishers = nonLand.filter((x) => x.role === "finisher").sort((a, b) => strength(b) - strength(a));
+  if (finishers.length) {
+    const n = names(finishers, 4);
+    winCons.push({ name: list(n), how: n.length > 1 ? "Finishers: cast one once the board is set up and it ends the game in a turn or two." : "Finisher: cast it once the board is set up and it ends the game in a turn or two." });
+  }
   if (winCons.length < 2) {
-    const beaters = nonLand.filter((c) => /Creature/.test(c.typeLine) && c.cmc >= 4).sort((a, b) => strength(b) - strength(a));
-    for (const c of beaters.slice(0, 2 - winCons.length)) winCons.push({ name: c.name, how: "Big threat: one of the main ways the deck closes games in combat." });
+    const beaters = nonLand.filter((c) => c.role !== "finisher" && /Creature/.test(c.typeLine) && c.cmc >= 4).sort((a, b) => strength(b) - strength(a));
+    const n = names(beaters, 3);
+    if (n.length) winCons.push({ name: list(n), how: n.length > 1 ? "Big threats: the main ways the deck closes games in combat." : "Big threat: the main way the deck closes games in combat." });
   }
   if (deck.options.themes.includes("voltron")) winCons.unshift({ name: cmd, how: "Commander damage: 21 from your commander knocks a player out." });
 

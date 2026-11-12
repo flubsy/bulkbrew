@@ -6,6 +6,21 @@ import type { BuiltDeck, Primer } from "@/lib/types";
 import { TOME, Sprite } from "./sprites";
 import { Button, Disclosure, Notice } from "./ui";
 
+/** Merge entries that share the same explanation: "A, B and C · same text" instead of three lines. */
+function mergeSame<T extends { name: string }>(items: T[], text: (x: T) => string, make: (name: string, x: T) => T): T[] {
+  const groups = new Map<string, T[]>();
+  for (const x of items) groups.set(text(x), [...(groups.get(text(x)) ?? []), x]);
+  return [...groups.values()].map((g) => (g.length === 1 ? g[0] : make(g.map((x) => x.name).join(", ").replace(/, ([^,]*)$/, " and $1"), g[0])));
+}
+
+function tidy(p: Primer): Primer {
+  return {
+    ...p,
+    keyCards: mergeSame(p.keyCards, (k) => k.why, (name, k) => ({ ...k, name })),
+    winCons: mergeSame(p.winCons, (w) => w.how, (name, w) => ({ name, how: w.how.replace(/^(Finisher|Big threat): /, "$1s: ").replace("cast it once", "cast one once").replace("one of the main ways", "the main ways") })),
+  };
+}
+
 function primerText(deck: BuiltDeck, p: Primer): string {
   const out = [`# ${deck.name ?? deck.commanders.map((c) => c.name).join(" / ")} primer`, "", p.summary, "", "## Game plan", ...p.plan.map((x) => `- ${x}`), "", "## Key cards", ...p.keyCards.map((k) => `- ${k.name}: ${k.why}`), "", "## How it wins", ...p.winCons.map((w) => `- ${w.name}: ${w.how}`)];
   if (deck.combos?.length) {
@@ -21,7 +36,7 @@ export function PrimerView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d:
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const p = deck.primer;
+  const p = deck.primer ? tidy(deck.primer) : undefined;
 
   async function generate() {
     setBusy(true);

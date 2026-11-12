@@ -7,9 +7,9 @@ import { useCurrency } from "./currency-provider";
 import { ColorIdentity } from "./mana";
 import { PrintingPicker } from "./printing-picker";
 import { GLYPH_CHEVRON, GLYPH_CROSS, GLYPH_MINUS, GLYPH_PLUS, GLYPH_SWAP, Sprite } from "./sprites";
-import { Button, ManaCost, Notice } from "./ui";
+import { Button, ManaCost, Notice, Select } from "./ui";
 
-const LIMIT = 400;
+const PAGE_SIZES = [100, 400, 1000];
 const COLS = 8;
 
 /**
@@ -25,7 +25,12 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
   const [removed, setRemoved] = useState<{ rows: OwnedCard[]; label: string } | null>(null);
   const { fromUsd, code } = useCurrency();
 
-  const shown = groups.slice(0, LIMIT);
+  const [pageSize, setPageSize] = useState(400);
+  const [pageWanted, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(groups.length / pageSize));
+  const page = Math.min(pageWanted, pages - 1); // filters can shrink the list under the current page
+  const shown = groups.slice(page * pageSize, (page + 1) * pageSize);
+  const onLastPage = page === pages - 1;
   const visible = useMemo(() => [...shown, ...(showBasics ? basics : [])], [shown, basics, showBasics]);
   const byKey = useMemo(() => new Map([...groups, ...basics].map((g) => [g.key, g])), [groups, basics]);
   const chosen = [...selected].map((k) => byKey.get(k)).filter((g): g is CardGroup => !!g);
@@ -92,7 +97,7 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
             {shown.map((g) => (
               <Fragment key={g.key}>{groupRows(g)}</Fragment>
             ))}
-            {basics.length > 0 && (
+            {onLastPage && basics.length > 0 && (
               <tr>
                 <td colSpan={COLS} className="!p-0">
                   <button type="button" onClick={() => setShowBasics((v) => !v)} aria-expanded={showBasics} className="flex w-full items-center gap-3 px-3 py-2 text-left text-cream-dim hover:bg-navy-600">
@@ -104,10 +109,26 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
                 </td>
               </tr>
             )}
-            {showBasics && basics.map((g) => <Fragment key={g.key}>{groupRows(g)}</Fragment>)}
+            {onLastPage && showBasics && basics.map((g) => <Fragment key={g.key}>{groupRows(g)}</Fragment>)}
           </tbody>
         </table>
-        {groups.length > LIMIT && <p className="mt-3 text-[16px] text-muted">Showing the first {LIMIT} of {groups.length}. Narrow the search to see more.</p>}
+        {groups.length > PAGE_SIZES[0] && (
+          <nav className="mt-3 flex flex-wrap items-center gap-2 text-[16px] text-cream-dim" aria-label="Collection pages">
+            <Button size="sm" variant="ghost" onClick={() => setPage(0)} disabled={page === 0}>first</Button>
+            <Button size="sm" variant="ghost" onClick={() => setPage(page - 1)} disabled={page === 0}>prev</Button>
+            <span>
+              Page {page + 1} of {pages} · cards {page * pageSize + 1}–{Math.min(groups.length, (page + 1) * pageSize)} of {groups.length}
+            </span>
+            <Button size="sm" variant="ghost" onClick={() => setPage(page + 1)} disabled={onLastPage}>next</Button>
+            <Button size="sm" variant="ghost" onClick={() => setPage(pages - 1)} disabled={onLastPage}>last</Button>
+            <label className="ml-auto flex items-center gap-2">
+              Per page
+              <Select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }} className="!w-24" aria-label="Cards per page">
+                {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+              </Select>
+            </label>
+          </nav>
+        )}
         {groups.length === 0 && basics.length === 0 && <p className="mt-3 text-[16px] text-muted">No cards match these filters.</p>}
       </div>
     </>

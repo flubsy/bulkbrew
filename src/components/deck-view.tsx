@@ -42,7 +42,6 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
   const { fmt } = useCurrency();
   const [copied, setCopied] = useState<string | null>(null);
   const [name, setName] = useState(deck.name ?? "");
-  const [showPower, setShowPower] = useState(true);
   const [share, setShare] = useState<{ busy?: boolean; url?: string; error?: string; copied?: boolean }>({});
   const canShare = !readOnly && sharingAvailable();
   const meta = FORMATS.find((f) => f.id === deck.options.format)!;
@@ -96,6 +95,8 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
     await db.wishlist.put({ name: w.name, addedAt: Date.now(), forDeck: title, note: w.label });
   }
 
+  const power = deck.cards.length ? currentPower(deck) : null;
+
   return (
     <>
       <Panel
@@ -126,69 +127,21 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
         )}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <Mini label="Cards" value={`${deck.stats.total + deck.commanders.length}`} sub={`of ${meta.size}`} />
-          <Mini label="Lands" value={`${deck.stats.lands}`} />
-          <Mini label="Avg MV" value={deck.stats.avgCmc.toFixed(2)} sub="non-land" />
+          <Mini label="Lands" value={`${deck.stats.lands}`} sub={`avg MV ${deck.stats.avgCmc.toFixed(2)}`} />
           <Mini label="Price" value={fmt(deck.stats.priceUsd, { whole: true })} sub="cheapest owned" />
-          <Mini label="Engine" value={deck.engine === "ai" ? "AI" : "Rules"} sub={deck.options.format === "commander" ? `bracket ~${deck.stats.estimatedBracket}` : undefined} />
+          <Mini label="Power" value={power ? `${power.score}/10` : "—"} sub={power?.label} />
+          <Mini label="Bracket" value={deck.options.format === "commander" ? `~${deck.stats.estimatedBracket ?? "?"}` : "—"} sub={deck.options.bracket ? `target ${deck.options.bracket}` : undefined} />
         </div>
-
-        {deck.cards.length > 0 && (
-          <div className="mt-5 flex items-start gap-4">
-            <div className="flex-1">{showPower && <PowerMeter power={currentPower(deck)} detail />}</div>
-            <Button size="sm" variant="ghost" onClick={() => setShowPower((s) => !s)} aria-pressed={showPower}>
-              {showPower ? "hide power" : "show power"}
-            </Button>
+        {power && <div className="mt-4"><PowerMeter power={power} /></div>}
+        {!readOnly && (
+          <div className="mt-4 flex items-end gap-2">
+            <div className="flex-1">
+              <label className="px-label" htmlFor="deck-name">Deck name</label>
+              <Input id="deck-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={title} />
+            </div>
+            <Button size="sm" variant="ghost" onClick={saveName}>save</Button>
           </div>
         )}
-
-        <div className="mt-5 grid gap-5 md:grid-cols-2">
-          <div>
-            <div className="px-label">Mana curve</div>
-            <div className="flex h-28 items-end gap-2">
-              {deck.stats.curve.map((n, i) => (
-                <div key={i} className="flex flex-1 flex-col items-center gap-1">
-                  <span className="text-[14px] text-cream-dim">{n || ""}</span>
-                  <div className="px-bar w-full" style={{ height: `${Math.max(4, (n / maxCurve) * 80)}px` }} aria-label={`${n} cards at mana value ${i}`} />
-                  <span className="font-pixel text-[11px] text-muted">{i === 7 ? "7+" : i}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="px-label">Colour pips</div>
-            <div className="flex h-6 w-full overflow-hidden gap-[2px]">
-              {(["W", "U", "B", "R", "G"] as Color[]).map((c) =>
-                deck.stats.pips[c] ? (
-                  <div key={c} className="flex items-center justify-center gap-1 bg-navy-900 text-[13px] text-cream-dim" style={{ width: `${(deck.stats.pips[c] / pipTotal) * 100}%` }} title={`${c}: ${deck.stats.pips[c]}`}>
-                    <ManaSymbol sym={c} size={16} /> {deck.stats.pips[c]}
-                  </div>
-                ) : null,
-              )}
-            </div>
-            <div className="mt-4 px-label">Roles</div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[16px] text-cream-dim">
-              {Object.entries(deck.stats.roles)
-                .sort((a, b) => b[1] - a[1])
-                .map(([r, n]) => (
-                  <span key={r}>
-                    {ROLE_LABEL[r as Role] ?? r} <span className="text-cream">{n}</span>
-                  </span>
-                ))}
-            </div>
-            {deck.stats.gameChangers.length > 0 && <p className="mt-3 text-[15px] text-gold">Game changers: {deck.stats.gameChangers.join(", ")}</p>}
-          </div>
-        </div>
-
-        {!readOnly && <><div className="mt-5 flex items-end gap-2">
-          <div className="flex-1">
-            <label className="px-label" htmlFor="deck-name">Deck name</label>
-            <Input id="deck-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={title} />
-          </div>
-          <Button size="sm" variant="ghost" onClick={saveName}>save</Button>
-        </div>
-        <p className="mt-2 text-[15px] text-muted">
-          Saved builds live under <a href="/saved" className="text-orange underline">Saved</a>. The .txt imports straight into Moxfield (Import → paste), Archidekt (Import), MTGO and Arena.
-        </p></>}
       </Panel>
 
       {reeval.error && <Notice tone="error">{reeval.error}</Notice>}
@@ -199,6 +152,53 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
           onDismiss={reeval.dismiss}
           onApply={async (d) => { await db.builds.put(d); onChange?.(d); reeval.dismiss(); }}
         />
+      )}
+
+      {deck.warnings.map((w, i) => (
+        <Notice key={i} tone="warn">{w}</Notice>
+      ))}
+
+      <Panel title="Decklist">
+        {editing && (
+          <div className="mb-5 grid gap-4">
+            <div className="px-border flex flex-wrap items-center gap-3 bg-navy-900 px-4 py-2 text-[17px]">
+              <span className={listCount === meta.size ? "text-cream" : "text-gold"}>{listCount} of {meta.size} cards</span>
+              <span className="text-muted">
+                {edit.changes.added.length || edit.changes.removed.length
+                  ? `${edit.changes.added.length} in · ${edit.changes.removed.length} out`
+                  : "Remove cards below, then add from alternatives or your collection."}
+              </span>
+              <span className="ml-auto flex gap-2">
+                <Button size="sm" onClick={edit.save} disabled={edit.saving || (!edit.changes.added.length && !edit.changes.removed.length)}>{edit.saving ? "saving…" : "save changes"}</Button>
+                <Button size="sm" variant="ghost" onClick={edit.discard} disabled={edit.saving}>discard</Button>
+              </span>
+            </div>
+            {edit.error && <Notice tone="error">{edit.error}</Notice>}
+            <OwnedSearch deck={deck} inDeck={new Set([...listCards, ...deck.commanders].map((c) => c.name))} onAdd={edit.addOwned} />
+            <p className="text-[15px] text-muted">Stats, power, combos and the primer update when you save.</p>
+          </div>
+        )}
+        {deck.commanders.length > 0 && <Group label="Commander" cards={deck.commanders} />}
+        {groups.map((g) => (
+          <Group key={g.role} label={ROLE_LABEL[g.role]} cards={g.cards} action={editing ? "remove" : undefined} />
+        ))}
+        <p className="mt-2 text-[14px] text-muted">
+          Hover a card for the image; tap on mobile. <span className="inline-block h-2 w-2 bg-sea-light align-middle" /> = EDHREC pick, <span className="font-pixel text-[11px] text-gold">GC</span> = game changer.
+          {!readOnly && <> Saved builds live under <a href="/saved" className="text-orange underline">Saved</a>; the .txt imports straight into Moxfield, Archidekt, MTGO and Arena.</>}
+        </p>
+      </Panel>
+
+      {alternatives.length > 0 && (
+        <Disclosure summary={`Alternatives you own (${alternatives.length})`} defaultOpen={editing}>
+          <p className="mb-3 text-[17px] text-cream-dim">
+            {editing ? "Tap + to put one in the deck." : "Eligible cards that just missed the cut, best first. They already pass colour, legality, bracket and budget; use edit to swap them in."}
+          </p>
+          <ul className="grid gap-[2px] xl:grid-cols-2">
+            {alternatives.map((c) => (
+              <Row key={c.name} c={c} action={editing ? "add" : undefined} />
+            ))}
+          </ul>
+        </Disclosure>
       )}
 
       {deck.upgrade && <UpgradeSummaryView deck={deck} />}
@@ -228,59 +228,7 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
         </Panel>
       )}
 
-      {deck.warnings.map((w, i) => (
-        <Notice key={i} tone="warn">{w}</Notice>
-      ))}
-      {deck.notes.map((n, i) => (
-        <Notice key={i}>{n}</Notice>
-      ))}
-      {deck.options.format === "commander" && (
-        <p className="text-[15px] text-muted">Target bracket: {BRACKETS.find((b) => b.id === deck.options.bracket)?.label ?? "—"}. Bracket estimates count game changers only; combo lines are not detected.</p>
-      )}
-
-      <Panel title="Decklist">
-        {editing && (
-          <div className="mb-5 grid gap-4">
-            <div className="px-border flex flex-wrap items-center gap-3 bg-navy-900 px-4 py-2 text-[17px]">
-              <span className={listCount === meta.size ? "text-cream" : "text-gold"}>{listCount} of {meta.size} cards</span>
-              <span className="text-muted">
-                {edit.changes.added.length || edit.changes.removed.length
-                  ? `${edit.changes.added.length} in · ${edit.changes.removed.length} out`
-                  : "Remove cards below, then add from alternatives or your collection."}
-              </span>
-              <span className="ml-auto flex gap-2">
-                <Button size="sm" onClick={edit.save} disabled={edit.saving || (!edit.changes.added.length && !edit.changes.removed.length)}>{edit.saving ? "saving…" : "save changes"}</Button>
-                <Button size="sm" variant="ghost" onClick={edit.discard} disabled={edit.saving}>discard</Button>
-              </span>
-            </div>
-            {edit.error && <Notice tone="error">{edit.error}</Notice>}
-            <OwnedSearch deck={deck} inDeck={new Set([...listCards, ...deck.commanders].map((c) => c.name))} onAdd={edit.addOwned} />
-            <p className="text-[15px] text-muted">Stats, power, combos and the primer update when you save.</p>
-          </div>
-        )}
-        {deck.commanders.length > 0 && <Group label="Commander" cards={deck.commanders} />}
-        {groups.map((g) => (
-          <Group key={g.role} label={ROLE_LABEL[g.role]} cards={g.cards} action={editing ? "remove" : undefined} />
-        ))}
-        <p className="mt-2 text-[14px] text-muted">
-          Hover a card for the image; tap on mobile. <span className="inline-block h-2 w-2 bg-sea-light align-middle" /> = EDHREC pick, <span className="font-pixel text-[11px] text-gold">GC</span> = game changer.
-        </p>
-      </Panel>
-
       <SampleHand deck={deck} />
-
-      {alternatives.length > 0 && (
-        <Disclosure summary={`Alternatives you own (${alternatives.length})`} defaultOpen>
-          <p className="mb-3 text-[17px] text-cream-dim">
-            {editing ? "Tap + to put one in the deck." : "Eligible cards that just missed the cut, best first. They already pass colour, legality, bracket and budget; use edit to swap them in."}
-          </p>
-          <ul className="grid gap-[2px] xl:grid-cols-2">
-            {alternatives.map((c) => (
-              <Row key={c.name} c={c} action={editing ? "add" : undefined} />
-            ))}
-          </ul>
-        </Disclosure>
-      )}
 
       {deck.wishlist?.length > 0 && (
         <Disclosure summary={`EDHREC wishlist — cards you don't own (${deck.wishlist.length})`}>
@@ -306,6 +254,63 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
           </ul>
         </Disclosure>
       )}
+
+      <Disclosure summary="Stats and build notes">
+        <div className="grid gap-6">
+          {power && (
+            <section>
+              <h3 className="font-pixel mb-2 text-[12px] text-orange">Power</h3>
+              <PowerMeter power={power} detail />
+            </section>
+          )}
+          <div className="grid gap-6 md:grid-cols-2">
+            <section>
+              <h3 className="font-pixel mb-2 text-[12px] text-orange">Mana curve</h3>
+              <div className="flex h-28 items-end gap-2">
+                {deck.stats.curve.map((n, i) => (
+                  <div key={i} className="flex flex-1 flex-col items-center gap-1">
+                    <span className="text-[14px] text-cream-dim">{n || ""}</span>
+                    <div className="px-bar w-full" style={{ height: `${Math.max(4, (n / maxCurve) * 80)}px` }} aria-label={`${n} cards at mana value ${i}`} />
+                    <span className="font-pixel text-[11px] text-muted">{i === 7 ? "7+" : i}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <section>
+              <h3 className="font-pixel mb-2 text-[12px] text-orange">Colour pips</h3>
+              <div className="flex h-6 w-full gap-[2px] overflow-hidden">
+                {(["W", "U", "B", "R", "G"] as Color[]).map((c) =>
+                  deck.stats.pips[c] ? (
+                    <div key={c} className="flex items-center justify-center gap-1 bg-navy-900 text-[13px] text-cream-dim" style={{ width: `${(deck.stats.pips[c] / pipTotal) * 100}%` }} title={`${c}: ${deck.stats.pips[c]}`}>
+                      <ManaSymbol sym={c} size={16} /> {deck.stats.pips[c]}
+                    </div>
+                  ) : null,
+                )}
+              </div>
+              <h3 className="font-pixel mb-2 mt-5 text-[12px] text-orange">Roles</h3>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[16px] text-cream-dim">
+                {Object.entries(deck.stats.roles)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([r, n]) => (
+                    <span key={r}>
+                      {ROLE_LABEL[r as Role] ?? r} <span className="text-cream">{n}</span>
+                    </span>
+                  ))}
+              </div>
+              {deck.stats.gameChangers.length > 0 && <p className="mt-3 text-[15px] text-gold">Game changers: {deck.stats.gameChangers.join(", ")}</p>}
+            </section>
+          </div>
+          {noteSections(deck.notes).map((n) => (
+            <section key={n.title}>
+              <h3 className="font-pixel mb-2 text-[12px] text-orange">{n.title}</h3>
+              <ul className="grid gap-1 text-[17px] text-cream-dim">{n.lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+            </section>
+          ))}
+          {deck.options.format === "commander" && (
+            <p className="text-[15px] text-muted">Target bracket: {BRACKETS.find((b) => b.id === deck.options.bracket)?.label ?? "—"}. The bracket estimate counts game changers; combos are listed above.</p>
+          )}
+        </div>
+      </Disclosure>
     </>
   );
 
@@ -362,6 +367,18 @@ function Mini({ label, value, sub }: { label: string; value: string; sub?: strin
       {sub && <div className="text-[14px] text-muted">{sub}</div>}
     </div>
   );
+}
+
+/** Build notes grouped under a heading each ("Pool: …" → Pool), with the prefix dropped. */
+function noteSections(notes: string[]): { title: string; lines: string[] }[] {
+  const out = new Map<string, string[]>();
+  for (const n of notes) {
+    const m = /^(Pool|Card roles|Template|EDHREC|Combos)\b[^:]*:\s*/.exec(n);
+    const title = m ? (m[1] === "Template" ? "Starting template" : m[1]) : /^EDHREC's average/.test(n) || /curve/.test(n) ? "Mana base and curve" : "Notes";
+    const line = m && m[1] !== "EDHREC" ? n.slice(m[0].length) : n;
+    out.set(title, [...(out.get(title) ?? []), line.charAt(0).toUpperCase() + line.slice(1)]);
+  }
+  return [...out].map(([title, lines]) => ({ title, lines }));
 }
 
 function slug(s: string) {
