@@ -39,7 +39,15 @@ Code: `src/lib/db.ts` (change tracking), `src/lib/sync.ts` (push/pull), `src/com
 
 Callback URL for every provider below: `https://<your-project-ref>.supabase.co/auth/v1/callback`. It's shown on each provider's page in Supabase.
 
-**Email link** is on by default. Supabase's built-in mailer only sends a few emails an hour. That's fine for you and some friends; for more, plug in a free SMTP service like Resend under Authentication → Emails.
+**Username + password** (the main sign-in). People create an account with a username, an email and a password, then sign in with either the username or the email.
+1. **Authentication → Sign In / Providers → Email**: make sure it's enabled, and turn **Confirm email** OFF. Accounts then work straight away with no verification email. If you leave it on, new accounts have to click a link before they can sign in.
+2. Set **Minimum password length** to 8 on the same page, to match the app.
+3. Run `supabase/schema.sql` again in the SQL Editor (safe to re-run). This adds the usernames table and the sign-in-by-username check.
+4. **Forgot password** emails a reset link that opens `/account?reset=1`. That URL is covered by the `/account` redirect URLs in step 2 above. Supabase's built-in mailer only sends a few emails an hour, which is fine for resets among friends; for more, plug in a free SMTP service like Resend under Authentication → Emails. Open the link on the same device and browser that asked for it.
+
+The email sign-in link (magic link) isn't offered in the app any more. Accounts made with it, or with Google/Discord, can pick a username and set a password on the Account page.
+
+Keep `email` in `NEXT_PUBLIC_AUTH_PROVIDERS` (step 4): it shows the username/password form. Google and Discord buttons appear underneath if they're listed too.
 
 **Google:**
 1. [console.cloud.google.com](https://console.cloud.google.com): create a project called "BulkBrew".

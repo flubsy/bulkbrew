@@ -8,6 +8,7 @@ import { hasLocalData, lastSync, linkDevice, linkedUser, pendingCount, syncNow }
 export interface AccountUser {
   id: string;
   email?: string;
+  username?: string;
   name?: string;
   avatar?: string;
   provider?: string;
@@ -39,7 +40,7 @@ function toUser(s: Session | null): AccountUser | null {
   const u = s?.user;
   if (!u) return null;
   const m = (u.user_metadata ?? {}) as Record<string, string>;
-  return { id: u.id, email: u.email, name: m.full_name ?? m.name ?? m.user_name, avatar: m.avatar_url ?? m.picture, provider: u.app_metadata?.provider as string | undefined };
+  return { id: u.id, email: u.email, username: m.username, name: m.username ?? m.full_name ?? m.name ?? m.user_name, avatar: m.avatar_url ?? m.picture, provider: u.app_metadata?.provider as string | undefined };
 }
 
 export function SyncProvider({ children }: { children: ReactNode }) {
