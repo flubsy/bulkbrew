@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PROVIDER_LABEL, supabase } from "@/lib/supabase";
+import { PROVIDER_LABEL, missingAccountEnv, supabase } from "@/lib/supabase";
 import { AccountSettings, AuthForms, NewPasswordForm } from "./auth-forms";
 import { deleteCloudData, wipeLocal } from "@/lib/sync";
 import { useAccount } from "./sync-provider";
@@ -34,6 +34,11 @@ export function AccountPanel() {
     return (
       <Panel title="Accounts aren't switched on yet">
         <p className="text-[18px] text-cream-dim">Right now everything is saved in this browser only. Accounts need a free Supabase project; the steps are in <code>docs/ACCOUNTS.md</code> in the repo.</p>
+        {missingAccountEnv.length > 0 && (
+          <div className="mt-3"><Notice tone="warn">
+            This deployment was built without {missingAccountEnv.join(" and ")}. In Vercel → Settings → Environment Variables, make sure {missingAccountEnv.length > 1 ? "they're" : "it's"} ticked for <b>Preview</b> as well as Production, then redeploy (these are read at build time, so an old deployment won&apos;t pick them up).
+          </Notice></div>
+        )}
         <p className="mt-3 text-[16px] text-muted">Until then, move data between devices with Collection → &ldquo;Download everything&rdquo; and &ldquo;Restore from backup&rdquo;.</p>
       </Panel>
     );

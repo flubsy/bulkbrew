@@ -10,10 +10,21 @@ import { createClient, type Provider, type SupabaseClient } from "@supabase/supa
  */
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-// The Vercel integration sets the anon key; newer Supabase projects call it the "publishable" key.
-const KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+// The Vercel integration sets the anon key; newer Supabase projects and templates call it the
+// "publishable" key under a few names. Each must be written out in full so Next inlines it at build.
+const KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY;
 
 export const accountsConfigured = !!(URL && KEY);
+
+/** Which of the two settings this build is missing (names only, for the Account page). */
+export const missingAccountEnv = [
+  !URL && "NEXT_PUBLIC_SUPABASE_URL",
+  !KEY && "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+].filter(Boolean) as string[];
 
 /** Which sign-in buttons to show. Each must also be enabled in Supabase → Authentication → Providers. */
 export const AUTH_PROVIDERS = (process.env.NEXT_PUBLIC_AUTH_PROVIDERS ?? "google,email")
