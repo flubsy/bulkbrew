@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { AccountButton } from "./account-button";
+import { CurrencyPicker } from "./currency-provider";
 import { ICON_ANVIL, ICON_CARDS, ICON_CAULDRON, ICON_CHEST, ICON_DIE, ICON_HOME, ICON_SWORD, Sprite } from "./sprites";
 
 type Tab = { href: string; label: string; short: string; icon: string[]; match?: string[] };
@@ -54,6 +55,10 @@ function FontToggle() {
 function SavedMenu({ active }: { active: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  // Close when the route changes (back/forward while it's open).
+  const path = usePathname();
+  const [lastPath, setLastPath] = useState(path);
+  if (path !== lastPath) { setLastPath(path); setOpen(false); }
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
@@ -68,7 +73,7 @@ function SavedMenu({ active }: { active: boolean }) {
         <Sprite grid={ICON_CHEST} scale={2} /> Saved <span className="text-[10px]">▼</span>
       </button>
       {open && (
-        <div role="menu" className="px-border px-border-strong absolute right-0 top-9 z-50 w-64 bg-navy-900 p-2">
+        <div role="menu" className="px-border px-border-strong absolute right-0 top-full z-50 mt-3 w-64 bg-navy-900 p-2">
           {SAVED_LINKS.map((l) => (
             <Link key={l.href} href={l.href} role="menuitem" onClick={() => setOpen(false)} className="block px-3 py-2 hover:bg-navy-600">
               <span className="font-pixel block text-[14px] text-cream">{l.label}</span>
@@ -87,7 +92,7 @@ export function Nav() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b-4 border-navy-600 bg-navy-800/95 backdrop-blur-[2px]">
+      <header className="sticky top-0 z-40 border-b-4 border-navy-600 bg-navy-800">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <Link href="/" className="flex items-center gap-3">
             <Sprite grid={ICON_CAULDRON} scale={3} />
@@ -105,6 +110,7 @@ export function Nav() {
           </nav>
           <div className="flex items-center gap-3">
             <span className="hidden text-[15px] text-muted md:inline" title="Cards in your collection">{owned ?? 0} owned</span>
+            <CurrencyPicker />
             <FontToggle />
             <AccountButton />
           </div>

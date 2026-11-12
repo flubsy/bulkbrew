@@ -30,6 +30,8 @@ class BulkBrewDB extends Dexie {
   meta!: EntityTable<{ key: string; value: unknown }, "key">;
 
   constructor() {
+    // Database and storage keys keep the old "deckbit" name on purpose: renaming them would
+    // strand everyone's existing collection in a database the app no longer opens.
     super("deckbit");
     this.version(1).stores({
       owned: "id, name, setCode, importedAt",

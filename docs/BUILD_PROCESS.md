@@ -77,7 +77,7 @@ Ordered by payoff:
 
 ## Where AI still helps (optional)
 
-The Claude pass (`builder/ai.ts`) only proposes swaps from your own bench, and every swap is validated. It's useful for nuance the numbers miss: anti-synergies, a combo line, an under-played gem. Turn it on per build. Set `DECKBIT_DISABLE_AI=1` to block it server-wide when sharing.
+The Claude pass (`builder/ai.ts`) only proposes swaps from your own bench, and every swap is validated. It's useful for nuance the numbers miss: anti-synergies, a combo line, an under-played gem. Turn it on per build. Set `BULKBREW_DISABLE_AI=1` to block it server-wide when sharing.
 
 ## Being a good API citizen
 

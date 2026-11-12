@@ -29,9 +29,9 @@ Code: `src/lib/db.ts` (change tracking), `src/lib/sync.ts` (push/pull), `src/com
 ### 2. Tell Supabase where the app lives
 
 **Authentication → URL Configuration:**
-- **Site URL:** your Vercel address, e.g. `https://deckbit.vercel.app`
+- **Site URL:** your Vercel address, e.g. `https://bulkbrew.vercel.app`
 - **Redirect URLs** (add each):
-  - `https://deckbit.vercel.app/account`
+  - `https://bulkbrew.vercel.app/account`
   - `http://localhost:3000/account`
   - `https://*-flubsy.vercel.app/**`. This covers Vercel preview links. Check the exact pattern in a preview URL on your Vercel dashboard.
 
@@ -63,11 +63,26 @@ In Vercel → your project → **Settings → Environment Variables**, add these
 | `NEXT_PUBLIC_SUPABASE_URL` | the Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the anon / publishable key |
 | `NEXT_PUBLIC_AUTH_PROVIDERS` | `google,discord,email`, listing only the ones you enabled |
-| `DECKBIT_DISABLE_AI` | `1`, so AI never runs on the public site |
+| `BULKBREW_DISABLE_AI` | `1`, so AI never runs on the public site |
 
 Then **Deployments → ⋯ → Redeploy**. Do the same in `.env.local` for local development.
 
 A **Sign in** button appears in the header. Tell your friend to download a backup first (Collection → Download everything). Signing in uploads what's in their browser, so nothing is lost either way.
+
+(`DECKBIT_DISABLE_AI` from before the rename still works.)
+
+### 5. Shared deck links
+
+The **share** button on a deck makes a public link, `/d/<id>`. Links live in a `shared_decks` table that's only reachable through two database functions, so nobody can list other people's shares. To switch it on, run all of `supabase/schema.sql` again in the SQL Editor. It's safe to re-run. Sharing works whether or not the person is signed in. If they're signed in, sharing the same deck again updates the same link.
+
+## Renaming the project (Deckbit → BulkBrew)
+
+The code and GitHub repo are already called BulkBrew. The browser database is still called `deckbit` on purpose: renaming it would hide everyone's saved collection. To finish the rename:
+
+1. **Vercel:** Project → **Settings → General → Project Name** → `bulkbrew`. Then **Settings → Domains**: add `bulkbrew.vercel.app`. Keep `deckbit.vercel.app` too, set to redirect to the new one, so old links and installed home-screen apps keep working.
+2. **Supabase:** **Project Settings → General → Project name** → BulkBrew. This is cosmetic: the project URL and keys don't change. Then **Authentication → URL Configuration**: set **Site URL** to `https://bulkbrew.vercel.app` and add `https://bulkbrew.vercel.app/account` to **Redirect URLs**. Keep the old deckbit entries until you've removed the old domain. Without this step, sign-in on the new domain redirects back to the old one.
+3. **Google sign-in:** nothing to change. Google redirects to Supabase's callback URL, which stays the same. Optionally rename the app on the OAuth consent screen.
+4. **Vercel env:** optionally rename `DECKBIT_DISABLE_AI` to `BULKBREW_DISABLE_AI`. Both names work.
 
 ## Android app
 

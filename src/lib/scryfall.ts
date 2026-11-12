@@ -38,12 +38,70 @@ export type ScryfallCard = ScryfallFace & {
   produced_mana?: string[];
   layout: string;
   legalities: Record<string, string>;
-  prices?: { usd?: string | null; usd_foil?: string | null; eur?: string | null };
+  prices?: { usd?: string | null; usd_foil?: string | null; usd_etched?: string | null; eur?: string | null; eur_foil?: string | null };
   edhrec_rank?: number;
   game_changer?: boolean;
   released_at?: string;
   card_faces?: ScryfallFace[];
 };
+
+const num = (s?: string | null) => (s ? parseFloat(s) : NaN);
+
+/**
+ * A USD price for one printing. Scryfall leaves `usd` empty for foil-only and etched-only printings
+ * (the price is in usd_foil / usd_etched) and for EU-only printings (only eur). Fall back in that
+ * order; EUR is converted at a rough rate. Printings with no price at all (non-English, promos,
+ * digital) stay null and are filled by backfillPrices().
+ */
+function bestPrice(p: ScryfallCard["prices"]): number | null {
+  for (const v of [num(p?.usd), num(p?.usd_foil), num(p?.usd_etched)]) if (Number.isFinite(v)) return v;
+  const eur = num(p?.eur) || num(p?.eur_foil);
+  return Number.isFinite(eur) && eur > 0 ? Math.round((eur / 0.87) * 100) / 100 : null;
+}
+
+/**
+ * Server-side: fill priceUsd for cards whose printing has no price, using the cheapest priced
+ * printing of the same card (Scryfall search: oracleid:… usd>0 prefer:usd-low). Mutates the cards.
+ * The usual culprits are non-English printings (Scryfall has no prices for them), promos and
+ * MTGO/Arena-only versions.
+ */
+export async function backfillPrices(cards: CardData[], opts: { maxQueries?: number } = {}): Promise<number> {
+  const missing = new Map<string, CardData[]>();
+  for (const c of cards) {
+    if (c.priceUsd != null || !c.oracleId || isBasic(c.name)) continue;
+    const list = missing.get(c.oracleId);
+    if (list) list.push(c);
+    else missing.set(c.oracleId, [c]);
+  }
+  const ids = [...missing.keys()];
+  const prices = await cheapestPrices(ids, opts.maxQueries ?? 20);
+  let fixed = 0;
+  for (const [id, price] of prices) for (const c of missing.get(id) ?? []) { c.priceUsd = price; fixed++; }
+  return fixed;
+}
+
+/** oracle id → cheapest USD price across printings. 15 ids per search, one search per 100 ms. */
+export async function cheapestPrices(oracleIds: string[], maxQueries = 20): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const ids = oracleIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+  for (let i = 0, n = 0; i < ids.length && n < maxQueries; i += 15, n++) {
+    const chunk = ids.slice(i, i + 15);
+    const q = `(${chunk.map((id) => `oracleid:${id}`).join(" or ")}) usd>0 prefer:usd-low`;
+    try {
+      const res = await fetch(`https://api.scryfall.com/cards/search?unique=cards&q=${encodeURIComponent(q)}`, { headers: SCRYFALL_HEADERS });
+      if (res.status === 429) { await sleep(1200); i -= 15; continue; }
+      if (res.ok) {
+        const j = (await res.json()) as { data?: ScryfallCard[] };
+        for (const c of j.data ?? []) {
+          const p = bestPrice(c.prices);
+          if (c.oracle_id && p != null) out.set(c.oracle_id, p);
+        }
+      }
+    } catch { /* network: leave these unpriced */ }
+    await sleep(100);
+  }
+  return out;
+}
 
 export function normalizeCard(c: ScryfallCard): CardData {
   const face = c.card_faces?.[0];
@@ -70,7 +128,7 @@ export function normalizeCard(c: ScryfallCard): CardData {
     loyalty: c.loyalty ?? face?.loyalty,
     layout: c.layout,
     legalities: c.legalities ?? {},
-    priceUsd: c.prices?.usd ? parseFloat(c.prices.usd) : null,
+    priceUsd: bestPrice(c.prices),
     priceUsdFoil: c.prices?.usd_foil ? parseFloat(c.prices.usd_foil) : null,
     edhrecRank: c.edhrec_rank ?? null,
     gameChanger: !!c.game_changer,

@@ -12,6 +12,11 @@ import { CommanderPicker } from "./commander-picker";
 import { DeckView } from "./deck-view";
 import { ManaSymbol } from "./mana";
 import { Button, Chip, Disclosure, Input, Label, Notice, Panel, Select, TextArea } from "./ui";
+import { useCurrency } from "./currency-provider";
+import { ReserveSelect } from "./reserve-select";
+import { reservedCounts, useReserveMode, withoutReserved } from "@/lib/reserve";
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 const DEFAULTS: BuildOptions = {
   format: "commander",
@@ -49,6 +54,8 @@ function DeckBuilderInner() {
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
   const [setQuery, setSetQuery] = useState("");
   const [restored, setRestored] = useState(false);
+  const { code, fromUsd, toUsd } = useCurrency();
+  const [reserveMode, setReserveMode] = useReserveMode();
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -130,7 +137,7 @@ function DeckBuilderInner() {
     const selectedRefs = (refs ?? []).filter((r) => options.referenceDeckIds.includes(r.id));
     setBusy(options.useAI ? "Scoring your collection, pulling EDHREC, then asking Claude to tune the list… (30–120s)" : "Scoring your collection against EDHREC and checking combos…");
     try {
-      const json = await postJson<{ deck: BuiltDeck; aiAvailable: boolean }>("/api/build", { options, owned: packCollection(enriched, options.format), refs: selectedRefs });
+      const json = await postJson<{ deck: BuiltDeck; aiAvailable: boolean }>("/api/build", { options, owned: packCollection(withoutReserved(enriched, reservedCounts(await db.builds.toArray(), reserveMode)), options.format), refs: selectedRefs });
       const built: BuiltDeck = json.deck;
       setAiAvailable(json.aiAvailable);
       setDeck(built);
@@ -229,18 +236,20 @@ function DeckBuilderInner() {
         <Panel title="Budget & price">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label hint="USD">Deck max</Label>
-              <Input type="number" min={0} step={10} placeholder="any" value={opts.budget ?? ""} onChange={(e) => setOpts((o) => ({ ...o, budget: e.target.value ? Number(e.target.value) : undefined }))} />
+              <Label hint={code}>Deck max</Label>
+              <Input type="number" min={0} step={10} placeholder="any" value={opts.budget != null ? round2(fromUsd(opts.budget)) : ""} onChange={(e) => setOpts((o) => ({ ...o, budget: e.target.value ? toUsd(Number(e.target.value)) : undefined }))} />
             </div>
             <div>
-              <Label hint="USD">Per card max</Label>
-              <Input type="number" min={0} step={1} placeholder="any" value={opts.maxCardPrice ?? ""} onChange={(e) => setOpts((o) => ({ ...o, maxCardPrice: e.target.value ? Number(e.target.value) : undefined }))} />
+              <Label hint={code}>Per card max</Label>
+              <Input type="number" min={0} step={1} placeholder="any" value={opts.maxCardPrice != null ? round2(fromUsd(opts.maxCardPrice)) : ""} onChange={(e) => setOpts((o) => ({ ...o, maxCardPrice: e.target.value ? toUsd(Number(e.target.value)) : undefined }))} />
             </div>
           </div>
           <label className="mt-3 flex items-center gap-3 text-[18px]">
             <input type="checkbox" className="h-5 w-5 accent-orange" checked={opts.preferCheap} onChange={(e) => setOpts((o) => ({ ...o, preferCheap: e.target.checked }))} />
             Prefer cheaper cards on ties
           </label>
+          {code !== "USD" && <p className="mt-2 text-[14px] text-muted">Prices are Scryfall&apos;s US prices converted to {code} at today&apos;s rate, so local shops can differ.</p>}
+          <div className="mt-4"><ReserveSelect mode={reserveMode} onChange={setReserveMode} /></div>
         </Panel>
 
         <Disclosure summary="Filters" aside={<span className="text-[15px] text-muted">{summarise(opts, refs?.length ?? 0)}</span>}>

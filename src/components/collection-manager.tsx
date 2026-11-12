@@ -6,6 +6,7 @@ import { clearSynced, db, exportBackup, importBackup, type Backup } from "@/lib/
 import { download } from "@/lib/export";
 import { ColorIdentity } from "./mana";
 import { useCollectionImport } from "./use-collection-import";
+import { useCurrency } from "./currency-provider";
 import { comboName } from "@/lib/types";
 import { Button, Input, Label, ManaCost, Notice, Panel, Progress, Select, TextArea } from "./ui";
 
@@ -19,6 +20,8 @@ export function CollectionManager() {
   const [typeFilter, setTypeFilter] = useState("");
   const [colorFilter, setColorFilter] = useState("");
   const [sort, setSort] = useState<"name" | "price" | "qty" | "cmc">("name");
+  const { fmt, fromUsd, code } = useCurrency();
+  const [priceFix, setPriceFix] = useState<string | null>(null);
 
   async function backup() {
     const b = await exportBackup();
@@ -36,6 +39,27 @@ export function CollectionManager() {
     }
   }
 
+  /** Rows whose printing has no Scryfall price (often non-English cards): price them from the cheapest printing. */
+  async function fixPrices() {
+    const rows = (await db.owned.toArray()).filter((c) => c.card && c.card.priceUsd == null && c.card.oracleId);
+    const ids = [...new Set(rows.map((r) => r.card!.oracleId))];
+    let fixed = 0;
+    setPriceFix(`Pricing ${ids.length} cards…`);
+    try {
+      for (let i = 0; i < ids.length; i += 300) {
+        const res = await fetch("/api/prices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ oracleIds: ids.slice(i, i + 300) }) });
+        const { prices } = (await res.json()) as { prices?: Record<string, number> };
+        const updates = rows.filter((r) => prices?.[r.card!.oracleId] != null).map((r) => ({ ...r, card: { ...r.card!, priceUsd: prices![r.card!.oracleId] } }));
+        if (updates.length) await db.owned.bulkPut(updates);
+        fixed += updates.length;
+        setPriceFix(`Priced ${fixed} of ${rows.length}…`);
+      }
+      setPriceFix(fixed ? `Priced ${fixed} rows from their cheapest printing.${fixed < rows.length ? ` ${rows.length - fixed} have no price anywhere on Scryfall (digital-only, tokens, oversized…).` : ""}` : "Scryfall has no price for any printing of these cards.");
+    } catch {
+      setPriceFix("Couldn't reach Scryfall. Try again in a minute.");
+    }
+  }
+
   async function clearAll() {
     if (!confirm("Delete your whole collection from this browser?")) return;
     await clearSynced("owned");
@@ -47,8 +71,9 @@ export function CollectionManager() {
     const cards = owned.reduce((s, c) => s + c.quantity, 0);
     const value = owned.reduce((s, c) => s + (c.card?.priceUsd ?? 0) * c.quantity, 0);
     const unmatched = owned.filter((c) => !c.card).length;
+    const unpriced = owned.filter((c) => c.card && c.card.priceUsd == null && !/^Basic Land/.test(c.card.typeLine)).length;
     const legendary = owned.filter((c) => /Legendary Creature|can be your commander/i.test((c.card?.typeLine ?? "") + (c.card?.oracleText ?? ""))).length;
-    return { cards, value, unmatched, legendary };
+    return { cards, value, unmatched, unpriced, legendary };
   }, [owned]);
 
   const filtered = useMemo(() => {
@@ -134,10 +159,16 @@ export function CollectionManager() {
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <MiniStat label="Cards" value={stats.cards.toLocaleString()} />
             <MiniStat label="Unique" value={owned.length.toLocaleString()} />
-            <MiniStat label="Value" value={`$${Math.round(stats.value).toLocaleString()}`} />
+            <MiniStat label="Value" value={fmt(stats.value, { whole: true })} />
             <MiniStat label="Commanders" value={stats.legendary.toLocaleString()} />
           </div>
           {stats.unmatched > 0 && <Notice tone="warn">{stats.unmatched} rows have no Scryfall match and will be ignored by the builder. Search for them below and check the spelling.</Notice>}
+          {(stats.unpriced > 0 || priceFix) && (
+            <Notice tone={priceFix ? "info" : "warn"}>
+              {priceFix ?? `${stats.unpriced} ${stats.unpriced === 1 ? "row has" : "rows have"} no price. Scryfall doesn't price some printings (non-English cards, promos, MTGO/Arena versions).`}{" "}
+              {stats.unpriced > 0 && !priceFix?.endsWith("…") && <Button size="sm" variant="ghost" onClick={fixPrices}>use cheapest printing</Button>}
+            </Notice>
+          )}
 
           <Panel
             title={`Cards (${filtered.length})`}
@@ -181,7 +212,7 @@ export function CollectionManager() {
                     <th>ID</th>
                     <th>Type</th>
                     <th>Set</th>
-                    <th className="text-right">USD</th>
+                    <th className="text-right">{code}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -197,7 +228,7 @@ export function CollectionManager() {
                       <td>{c.card && <ColorIdentity ci={c.card.colorIdentity} size={16} label={comboName(c.card.colorIdentity)} />}</td>
                       <td className="text-cream-dim">{c.card?.typeLine ?? "—"}</td>
                       <td className="uppercase text-muted">{c.card?.setCode ?? c.setCode ?? ""}</td>
-                      <td className="text-right text-cream-dim">{c.card?.priceUsd != null ? c.card.priceUsd.toFixed(2) : "—"}</td>
+                      <td className="text-right text-cream-dim">{c.card?.priceUsd != null ? fromUsd(c.card.priceUsd).toFixed(2) : <span title="Scryfall has no price for this printing">—</span>}</td>
                     </tr>
                   ))}
                 </tbody>

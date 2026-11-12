@@ -1,4 +1,4 @@
-import { fetchCollection, fetchNamed, keyOf, normalizeCard, type Identifier } from "@/lib/scryfall";
+import { backfillPrices, fetchCollection, fetchNamed, keyOf, normalizeCard, type Identifier } from "@/lib/scryfall";
 import type { CardData } from "@/lib/types";
 
 /**
@@ -37,6 +37,8 @@ export async function POST(req: Request) {
       }
       stillMissing.push(ident);
     }
+    // Printings Scryfall has no price for (non-English, promos…): use the cheapest priced printing.
+    await backfillPrices(Object.values(cards), { maxQueries: 6 });
     return Response.json({ cards, notFound: stillMissing });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Scryfall request failed" }, { status: 502 });

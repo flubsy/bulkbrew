@@ -11,6 +11,10 @@ import { currentPower } from "@/lib/builder/power";
 import { PrimerView } from "./primer-view";
 import { ComboList, UpgradeSummaryView } from "./upgrade-summary";
 import { Button, Disclosure, Input, Notice, Panel } from "./ui";
+import { useCurrency } from "./currency-provider";
+import { SampleHand } from "./sample-hand";
+import { BuyLinks } from "./buy-links";
+import { shareDeck, sharingAvailable, shareUrl } from "@/lib/share";
 
 const ROLE_LABEL: Record<Role, string> = {
   commander: "Commander",
@@ -31,11 +35,14 @@ const ROLE_LABEL: Record<Role, string> = {
 
 const ROLE_ORDER: Role[] = ["creature", "synergy", "ramp", "draw", "removal", "wipe", "counter", "tutor", "protection", "recursion", "finisher", "utility", "land"];
 
-export function DeckView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d: BuiltDeck) => void }) {
+export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck; onChange?: (d: BuiltDeck) => void; readOnly?: boolean }) {
   const preview = useCardPreview();
+  const { fmt } = useCurrency();
   const [copied, setCopied] = useState<string | null>(null);
   const [name, setName] = useState(deck.name ?? "");
   const [showPower, setShowPower] = useState(true);
+  const [share, setShare] = useState<{ busy?: boolean; url?: string; error?: string; copied?: boolean }>({});
+  const canShare = !readOnly && sharingAvailable();
   const meta = FORMATS.find((f) => f.id === deck.options.format)!;
   const groups = ROLE_ORDER.map((r) => ({ role: r, cards: deck.cards.filter((c) => c.role === r) })).filter((g) => g.cards.length);
   const maxCurve = Math.max(1, ...deck.stats.curve);
@@ -54,6 +61,29 @@ export function DeckView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d: B
     onChange?.(updated);
   }
 
+  async function doShare() {
+    setShare({ busy: true });
+    try {
+      const id = await shareDeck(deck);
+      const url = shareUrl(id);
+      if (id !== deck.shareId) {
+        if (await db.builds.get(deck.id)) await db.builds.update(deck.id, { shareId: id });
+        onChange?.({ ...deck, shareId: id });
+      }
+      let copied = false;
+      try { await navigator.clipboard.writeText(url); copied = true; } catch { /* not allowed: the link is shown instead */ }
+      setShare({ url, copied });
+    } catch (e) {
+      setShare({ error: e instanceof Error ? e.message : "Couldn't share" });
+    }
+  }
+
+  async function toggleBuilt() {
+    const updated = { ...deck, inUse: !deck.inUse || undefined };
+    await db.builds.put(updated);
+    onChange?.(updated);
+  }
+
   async function addWish(w: EdhrecCard) {
     await db.wishlist.put({ name: w.name, addedAt: Date.now(), forDeck: title, note: w.label });
   }
@@ -68,14 +98,27 @@ export function DeckView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d: B
             <Button size="sm" onClick={() => copy("text")}>{copied === "text" ? "copied" : "copy list"}</Button>
             <Button size="sm" variant="ghost" onClick={() => download(`${slug(title)}.txt`, deckToText(deck))}>.txt</Button>
             <Button size="sm" variant="ghost" onClick={() => download(`${slug(title)}.csv`, deckToCsv(deck), "text/csv")}>.csv</Button>
+            {canShare && <Button size="sm" variant="ghost" onClick={doShare} disabled={share.busy}>{share.busy ? "sharing…" : deck.shareId ? "share link" : "share"}</Button>}
+            {!readOnly && <Button size="sm" variant="ghost" onClick={toggleBuilt} aria-pressed={!!deck.inUse} title="Mark decks you've actually put together, so their cards can be kept out of other builds">{deck.inUse ? "✓ built" : "mark built"}</Button>}
           </div>
         }
       >
+        {(share.url || share.error) && (
+          <div className="mb-4">
+            {share.error ? <Notice tone="error">{share.error}</Notice> : (
+              <Notice tone="ok">
+                {share.copied ? "Link copied. " : "Share this link: "}
+                <a href={share.url} className="break-all text-orange underline" target="_blank" rel="noreferrer">{share.url}</a>
+                <span className="block text-[14px] text-muted">Anyone with it can view the list, stats and primer, and copy or upgrade it. Your collection isn&apos;t included.{deck.shareId ? " Sharing again after changes updates this same link when you're signed in." : ""}</span>
+              </Notice>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <Mini label="Cards" value={`${deck.stats.total + deck.commanders.length}`} sub={`of ${meta.size}`} />
           <Mini label="Lands" value={`${deck.stats.lands}`} />
           <Mini label="Avg MV" value={deck.stats.avgCmc.toFixed(2)} sub="non-land" />
-          <Mini label="Price" value={`$${Math.round(deck.stats.priceUsd)}`} sub="cheapest owned" />
+          <Mini label="Price" value={fmt(deck.stats.priceUsd, { whole: true })} sub="cheapest owned" />
           <Mini label="Engine" value={deck.engine === "ai" ? "AI" : "Rules"} sub={deck.options.format === "commander" ? `bracket ~${deck.stats.estimatedBracket}` : undefined} />
         </div>
 
@@ -126,7 +169,7 @@ export function DeckView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d: B
           </div>
         </div>
 
-        <div className="mt-5 flex items-end gap-2">
+        {!readOnly && <><div className="mt-5 flex items-end gap-2">
           <div className="flex-1">
             <label className="px-label" htmlFor="deck-name">Deck name</label>
             <Input id="deck-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={title} />
@@ -135,7 +178,7 @@ export function DeckView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d: B
         </div>
         <p className="mt-2 text-[15px] text-muted">
           Saved builds live under <a href="/saved" className="text-orange underline">Saved</a>. The .txt imports straight into Moxfield (Import → paste), Archidekt (Import), MTGO and Arena.
-        </p>
+        </p></>}
       </Panel>
 
       {deck.upgrade && <UpgradeSummaryView deck={deck} />}
@@ -185,6 +228,8 @@ export function DeckView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d: B
         </p>
       </Panel>
 
+      <SampleHand deck={deck} />
+
       {deck.alternatives?.length > 0 && (
         <Disclosure summary={`Alternatives you own (${deck.alternatives.length})`} defaultOpen>
           <p className="mb-3 text-[17px] text-cream-dim">Eligible cards that just missed the cut, best first. Swap any of these in by hand — they already pass colour, legality, bracket and budget.</p>
@@ -209,9 +254,12 @@ export function DeckView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d: B
                     {w.inclusion !== undefined ? ` · ${Math.round(w.inclusion * 100)}% of decks` : ""}
                   </span>
                 </span>
-                <Button size="sm" variant="ghost" onClick={() => addWish(w)}>
-                  + wish
-                </Button>
+                <span className="flex shrink-0 items-center gap-1">
+                  <BuyLinks name={w.name} compact />
+                  <Button size="sm" variant="ghost" onClick={() => addWish(w)}>
+                    + wish
+                  </Button>
+                </span>
               </li>
             ))}
           </ul>
@@ -231,7 +279,7 @@ export function DeckView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d: B
         </span>
         <span className="flex shrink-0 items-center gap-2">
           <ManaCost cost={c.manaCost} size={16} />
-          <span className="w-14 text-right text-[14px] text-muted">{fmtPrice(c.priceUsd)}</span>
+          <span className="w-14 text-right text-[14px] text-muted">{fmt(c.priceUsd)}</span>
         </span>
       </li>
     );
@@ -262,13 +310,6 @@ function Mini({ label, value, sub }: { label: string; value: string; sub?: strin
       {sub && <div className="text-[14px] text-muted">{sub}</div>}
     </div>
   );
-}
-
-function fmtPrice(p: number | null) {
-  if (p == null) return "";
-  if (p < 1) return `$${p.toFixed(2)}`;
-  if (p < 10) return `$${p.toFixed(1)}`;
-  return `$${Math.round(p)}`;
 }
 
 function slug(s: string) {

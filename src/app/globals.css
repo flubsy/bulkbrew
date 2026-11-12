@@ -35,15 +35,22 @@
 
   /* Text fonts. Pixel by default; "readable" swaps everything except the wordmark to
      Atkinson Hyperlegible (designed for low-vision legibility). Toggle: the Aa button. */
-  --font-ui: var(--font-pixelify), monospace;
-  --font-reading: var(--font-pixelify), monospace;
-  /* Normalises lowercase height so both fonts look the same size at the same px value. */
-  --reading-adjust: 0.4;
+  --font-ui: var(--font-pixel-face), monospace;
+  --font-reading: var(--font-pixel-face), monospace;
+  /* font-size-adjust (x-height ÷ font size). DotGothic16 has a tall x-height, so these scale it to
+     the same line widths the layout was designed for: body text, then headings/labels/buttons. */
+  --reading-adjust: 0.48;
+  --ui-adjust: 0.54;
+  /* DotGothic16 has one weight; faux bold smears its dots, so headings stay regular weight. */
+  --ui-synthesis: none;
 }
 
 :root[data-font="readable"] {
   --font-ui: var(--font-atkinson), system-ui, sans-serif;
   --font-reading: var(--font-atkinson), system-ui, sans-serif;
+  --reading-adjust: 0.4;
+  --ui-adjust: none;
+  --ui-synthesis: weight;
 }
 
 @theme inline {
@@ -103,7 +110,7 @@ body {
   color: var(--navy-900);
 }
 
-/* Headings & labels: Pixelify Sans (tall x-height, proportional — readable at 12px+). */
+/* Headings & labels: same pixel face as the body, slightly larger. */
 .font-pixel {
   font-family: var(--font-pixel);
   font-weight: 600;
@@ -124,7 +131,6 @@ body {
 /* A stepped "notched corner" border drawn with box-shadows. No rounded corners
    anywhere in this app — this is the border for panels, inputs and buttons. */
 .px-border {
-  position: relative;
   border: 0;
   box-shadow:
     0 calc(-1 * var(--px)) 0 0 var(--px-border-color, var(--line)),
@@ -260,9 +266,7 @@ textarea.px-input { line-height: 1.15; }
   pointer-events: none;
   z-index: 50;
   background:
-    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px);
-  mix-blend-mode: multiply;
-  opacity: 0.6;
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.085) 0 1px, transparent 1px 3px);
 }
 
 /* Pixel star field: a handful of 4px squares via box-shadow. */
@@ -379,7 +383,10 @@ textarea.px-input { line-height: 1.15; }
 
 
 /* Headings, labels, buttons and chips are sized for the UI font directly. */
-.font-pixel, .font-wordmark, .px-btn, .px-chip, .px-label, .px-table th { font-size-adjust: none; }
+.font-pixel, .px-btn, .px-chip, .px-label, .px-table th { font-size-adjust: var(--ui-adjust); font-synthesis: var(--ui-synthesis); }
+.font-wordmark { font-size-adjust: none; }
+/* Numbers line up in tables, stats and price columns. */
+body { font-variant-numeric: tabular-nums; }
 :root[data-font="readable"] body { -webkit-font-smoothing: auto; -moz-osx-font-smoothing: grayscale; letter-spacing: 0; }
 :root[data-font="readable"] .font-pixel, :root[data-font="readable"] .px-btn, :root[data-font="readable"] .px-chip, :root[data-font="readable"] .px-label { letter-spacing: 0.01em; }
 

@@ -11,6 +11,9 @@ import { BRACKETS, type BuildOptions, type BuiltDeck, type EdhrecTag, type Refer
 import { CardPreviewProvider } from "./card-preview";
 import { DeckView } from "./deck-view";
 import { Button, Disclosure, Input, Label, Notice, Panel, Select, TextArea } from "./ui";
+import { ReserveSelect } from "./reserve-select";
+import { UPGRADE_HANDOFF_KEY } from "./shared-deck";
+import { reservedCounts, useReserveMode, withoutReserved } from "@/lib/reserve";
 
 type Source = "url" | "paste" | "saved";
 
@@ -49,7 +52,7 @@ function Inner() {
   const [allowLands, setAllowLands] = useState(true);
   const [protect, setProtect] = useState("");
   const [never, setNever] = useState("");
-  const [skipSaved, setSkipSaved] = useState(false);
+  const [reserveMode, setReserveMode] = useReserveMode();
   const [useEdhrec, setUseEdhrec] = useState(true);
 
   const [busy, setBusy] = useState<string | null>(null);
@@ -71,6 +74,28 @@ function Inner() {
     return () => { alive = false; };
   }, [commanders]);
 
+  function pickBuild(b: BuiltDeck) {
+    setDeck({
+      id: `build:${b.id}`, source: "text", url: "", name: b.name ?? b.commanders.map((c) => c.name).join(" / "),
+      commanders: b.commanders.map((c) => c.name),
+      cards: [...b.commanders.map((c) => ({ name: c.name, quantity: 1, board: "commander" as const })), ...b.cards.map((c) => ({ name: c.name, quantity: c.quantity, board: "main" as const }))],
+      fetchedAt: Date.now(),
+    });
+    setBracket(b.options.bracket ?? b.stats.estimatedBracket ?? 3);
+  }
+
+  // A deck handed over from a share link ("upgrade it from my collection").
+  useEffect(() => {
+    if (!builds) return;
+    let id: string | null = null;
+    try { id = localStorage.getItem(UPGRADE_HANDOFF_KEY); } catch { /* ignore */ }
+    const b = id ? builds.find((x) => x.id === id) : undefined;
+    if (!b) return;
+    try { localStorage.removeItem(UPGRADE_HANDOFF_KEY); } catch { /* ignore */ }
+    const t = setTimeout(() => { setSource("saved"); setSavedId(b.id); pickBuild(b); }, 0);
+    return () => clearTimeout(t);
+  }, [builds]);
+
   async function load() {
     setError(null);
     setResult(null);
@@ -82,15 +107,8 @@ function Inner() {
       if (source === "saved") {
         const b = builds?.find((x) => x.id === savedId);
         const r = refDecks?.find((x) => x.id === savedId);
-        if (b) {
-          setDeck({
-            id: `build:${b.id}`, source: "text", url: "", name: b.name ?? b.commanders.map((c) => c.name).join(" / "),
-            commanders: b.commanders.map((c) => c.name),
-            cards: [...b.commanders.map((c) => ({ name: c.name, quantity: 1, board: "commander" as const })), ...b.cards.map((c) => ({ name: c.name, quantity: c.quantity, board: "main" as const }))],
-            fetchedAt: Date.now(),
-          });
-          setBracket(b.options.bracket ?? 3);
-        } else if (r) setDeck(r);
+        if (b) pickBuild(b);
+        else if (r) setDeck(r);
         else throw new Error("Pick a deck first.");
         return;
       }
@@ -112,8 +130,11 @@ function Inner() {
     setResult(null);
     setBusy(explainOnly ? "Reading the list and writing a primer…" : "Scoring your list and your collection, then finding the best swaps…");
     try {
-      const savedNames = skipSaved ? (builds ?? []).flatMap((b) => b.cards.map((c) => c.name)) : [];
-      const neverList = [...never.split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean), ...savedNames];
+      const neverList = never.split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean);
+      // Don't count the deck being upgraded (or earlier upgrades of it) as "another deck".
+      const selfIds = deck.id.startsWith("build:") ? [deck.id.slice(6)] : [];
+      const sameDeck = (builds ?? []).filter((b) => b.upgrade?.originalName === deck.name || b.name === `${deck.name} (upgraded)`).map((b) => b.id);
+      const pool = withoutReserved(enriched, reservedCounts(builds ?? [], reserveMode, [...selfIds, ...sameDeck]));
       const mapped = tag ? mapEdhrecTag(tag, knownTypes) : { themes: [] as BuildOptions["themes"], tribe: undefined };
       const build: BuildOptions = {
         format: "commander",
@@ -131,7 +152,7 @@ function Inner() {
         mustOwnEverything: true,
       };
       const upgrade: UpgradeOptions = { maxSwaps, minGain, protect: protect.split(/\r?\n|,/).map((s) => s.trim()).filter(Boolean), allowLandSwaps: allowLands };
-      const json = await postJson<{ deck?: BuiltDeck; needCommander?: string[] }>("/api/upgrade", { deck, commanders, owned: explainOnly ? [] : packCollection(enriched, "commander"), build, upgrade, explainOnly });
+      const json = await postJson<{ deck?: BuiltDeck; needCommander?: string[] }>("/api/upgrade", { deck, commanders, owned: explainOnly ? [] : packCollection(pool, "commander"), build, upgrade, explainOnly });
       if (json.needCommander) {
         setNeedCommander(json.needCommander);
         setError(json.needCommander.length ? "This list doesn't mark a commander. Pick it below and run again." : "No legendary creature found in this list to use as commander.");
@@ -207,6 +228,7 @@ function Inner() {
           <Select value={bracket} onChange={(e) => setBracket(Number(e.target.value) as BuildOptions["bracket"])}>
             {BRACKETS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
           </Select>
+          <p className="mt-2 text-[14px] text-muted">Works both ways: pick a lower bracket than the deck and the cards it doesn&apos;t allow (extra game changers, extra turns, land denial, two-card combos) are swapped out first.</p>
           <div className="mt-4">
             <Label hint={`${maxSwaps}`}>Max swaps</Label>
             <input type="range" min={1} max={40} value={maxSwaps} onChange={(e) => setMaxSwaps(Number(e.target.value))} className="w-full accent-orange" aria-label="Max swaps" />
@@ -238,10 +260,7 @@ function Inner() {
             <Label hint="one per line — never take these from your bulk">Never use</Label>
             <TextArea rows={3} value={never} onChange={(e) => setNever(e.target.value)} placeholder="Cards promised to other decks" />
           </div>
-          <label className="mt-3 flex items-center gap-3 text-[17px]">
-            <input type="checkbox" className="h-5 w-5 accent-orange" checked={skipSaved} onChange={(e) => setSkipSaved(e.target.checked)} />
-            Don&apos;t take cards used in my saved decks
-          </label>
+          <div className="mt-3"><ReserveSelect mode={reserveMode} onChange={setReserveMode} /></div>
           <label className="mt-2 flex items-center gap-3 text-[17px]">
             <input type="checkbox" className="h-5 w-5 accent-orange" checked={allowLands} onChange={(e) => setAllowLands(e.target.checked)} />
             Allow land upgrades (basics → utility lands)

@@ -19,7 +19,7 @@ export function PowerMeter({ power, detail = false }: { power: PowerRating; deta
         ))}
       </div>
       {detail && (
-        <ul className="mt-3 grid gap-1 text-[16px] text-cream-dim sm:grid-cols-2">
+        <ul className="mt-3 grid gap-x-8 gap-y-1 text-[16px] text-cream-dim sm:grid-cols-2">
           {power.factors.map((f) => (
             <li key={f.label} className="flex justify-between gap-3">
               <span>
