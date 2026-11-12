@@ -6,8 +6,15 @@ import { useAccount } from "./sync-provider";
 /** Header button: "Sign in", or the user's initial with a sync-status dot. Hidden when accounts aren't set up. */
 export function AccountButton() {
   const { configured, ready, user, status, pending, needsLink } = useAccount();
-  if (!configured || !ready) return null;
-  if (!user) {
+  // Always visible: without accounts it leads to the page that explains how to switch them on.
+  if (!configured) {
+    return (
+      <Link href="/account" className="px-chip px-border !px-2 !py-1" title="Accounts aren't set up on this deployment">
+        Account
+      </Link>
+    );
+  }
+  if (!ready || !user) {
     return (
       <Link href="/account" className="px-btn px-btn-sm inline-block">
         Sign in
