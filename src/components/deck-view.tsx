@@ -15,6 +15,8 @@ import { useCurrency } from "./currency-provider";
 import { SampleHand } from "./sample-hand";
 import { BuyLinks } from "./buy-links";
 import { shareDeck, sharingAvailable, shareUrl } from "@/lib/share";
+import { OwnedSearch, ReEvaluatePanel, useDeckDraft, useReEvaluate } from "./deck-edit";
+import { GLYPH_CROSS, GLYPH_PLUS, Sprite } from "./sprites";
 
 const ROLE_LABEL: Record<Role, string> = {
   commander: "Commander",
@@ -44,7 +46,13 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
   const [share, setShare] = useState<{ busy?: boolean; url?: string; error?: string; copied?: boolean }>({});
   const canShare = !readOnly && sharingAvailable();
   const meta = FORMATS.find((f) => f.id === deck.options.format)!;
-  const groups = ROLE_ORDER.map((r) => ({ role: r, cards: deck.cards.filter((c) => c.role === r) })).filter((g) => g.cards.length);
+  const edit = useDeckDraft(deck, (d) => onChange?.(d), !readOnly);
+  const reeval = useReEvaluate(deck);
+  const editing = !!edit.draft;
+  const listCards = edit.draft?.cards ?? deck.cards;
+  const alternatives = edit.draft?.alternatives ?? deck.alternatives ?? [];
+  const listCount = listCards.reduce((s, c) => s + c.quantity, 0) + deck.commanders.length;
+  const groups = ROLE_ORDER.map((r) => ({ role: r, cards: listCards.filter((c) => c.role === r) })).filter((g) => g.cards.length);
   const maxCurve = Math.max(1, ...deck.stats.curve);
   const pipTotal = Object.values(deck.stats.pips).reduce((a, b) => a + b, 0) || 1;
   const title = deck.name || deck.commanders.map((c) => c.name).join(" / ") || meta.label;
@@ -99,6 +107,8 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
             <Button size="sm" variant="ghost" onClick={() => download(`${slug(title)}.txt`, deckToText(deck))}>.txt</Button>
             <Button size="sm" variant="ghost" onClick={() => download(`${slug(title)}.csv`, deckToCsv(deck), "text/csv")}>.csv</Button>
             {canShare && <Button size="sm" variant="ghost" onClick={doShare} disabled={share.busy}>{share.busy ? "sharing…" : deck.shareId ? "share link" : "share"}</Button>}
+            {!readOnly && deck.cards.length > 0 && <Button size="sm" variant="ghost" onClick={editing ? edit.discard : edit.start} aria-pressed={editing}>{editing ? "stop editing" : "edit"}</Button>}
+            {!readOnly && deck.commanders.length > 0 && <Button size="sm" variant="ghost" onClick={reeval.run} disabled={reeval.busy || editing} title="Check your collection for cards that would improve this deck now">{reeval.busy ? "re-evaluating…" : "re-evaluate"}</Button>}
             {!readOnly && <Button size="sm" variant="ghost" onClick={toggleBuilt} aria-pressed={!!deck.inUse} title="Mark decks you've actually put together, so their cards can be kept out of other builds">{deck.inUse ? "✓ built" : "mark built"}</Button>}
           </div>
         }
@@ -181,6 +191,16 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
         </p></>}
       </Panel>
 
+      {reeval.error && <Notice tone="error">{reeval.error}</Notice>}
+      {reeval.result && (
+        <ReEvaluatePanel
+          deck={deck}
+          result={reeval.result}
+          onDismiss={reeval.dismiss}
+          onApply={async (d) => { await db.builds.put(d); onChange?.(d); reeval.dismiss(); }}
+        />
+      )}
+
       {deck.upgrade && <UpgradeSummaryView deck={deck} />}
 
       <PrimerView deck={deck} onChange={onChange} />
@@ -219,9 +239,28 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
       )}
 
       <Panel title="Decklist">
+        {editing && (
+          <div className="mb-5 grid gap-4">
+            <div className="px-border flex flex-wrap items-center gap-3 bg-navy-900 px-4 py-2 text-[17px]">
+              <span className={listCount === meta.size ? "text-cream" : "text-gold"}>{listCount} of {meta.size} cards</span>
+              <span className="text-muted">
+                {edit.changes.added.length || edit.changes.removed.length
+                  ? `${edit.changes.added.length} in · ${edit.changes.removed.length} out`
+                  : "Remove cards below, then add from alternatives or your collection."}
+              </span>
+              <span className="ml-auto flex gap-2">
+                <Button size="sm" onClick={edit.save} disabled={edit.saving || (!edit.changes.added.length && !edit.changes.removed.length)}>{edit.saving ? "saving…" : "save changes"}</Button>
+                <Button size="sm" variant="ghost" onClick={edit.discard} disabled={edit.saving}>discard</Button>
+              </span>
+            </div>
+            {edit.error && <Notice tone="error">{edit.error}</Notice>}
+            <OwnedSearch deck={deck} inDeck={new Set([...listCards, ...deck.commanders].map((c) => c.name))} onAdd={edit.addOwned} />
+            <p className="text-[15px] text-muted">Stats, power, combos and the primer update when you save.</p>
+          </div>
+        )}
         {deck.commanders.length > 0 && <Group label="Commander" cards={deck.commanders} />}
         {groups.map((g) => (
-          <Group key={g.role} label={ROLE_LABEL[g.role]} cards={g.cards} />
+          <Group key={g.role} label={ROLE_LABEL[g.role]} cards={g.cards} action={editing ? "remove" : undefined} />
         ))}
         <p className="mt-2 text-[14px] text-muted">
           Hover a card for the image; tap on mobile. <span className="inline-block h-2 w-2 bg-sea-light align-middle" /> = EDHREC pick, <span className="font-pixel text-[11px] text-gold">GC</span> = game changer.
@@ -230,12 +269,14 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
 
       <SampleHand deck={deck} />
 
-      {deck.alternatives?.length > 0 && (
-        <Disclosure summary={`Alternatives you own (${deck.alternatives.length})`} defaultOpen>
-          <p className="mb-3 text-[17px] text-cream-dim">Eligible cards that just missed the cut, best first. Swap any of these in by hand — they already pass colour, legality, bracket and budget.</p>
+      {alternatives.length > 0 && (
+        <Disclosure summary={`Alternatives you own (${alternatives.length})`} defaultOpen>
+          <p className="mb-3 text-[17px] text-cream-dim">
+            {editing ? "Tap + to put one in the deck." : "Eligible cards that just missed the cut, best first. They already pass colour, legality, bracket and budget; use edit to swap them in."}
+          </p>
           <ul className="grid gap-[2px] xl:grid-cols-2">
-            {deck.alternatives.map((c) => (
-              <Row key={c.name} c={c} />
+            {alternatives.map((c) => (
+              <Row key={c.name} c={c} action={editing ? "add" : undefined} />
             ))}
           </ul>
         </Disclosure>
@@ -268,7 +309,7 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
     </>
   );
 
-  function Row({ c }: { c: DeckEntry }) {
+  function Row({ c, action }: { c: DeckEntry; action?: "add" | "remove" }) {
     return (
       <li className="flex items-center justify-between gap-2 px-2 py-1 text-[18px] hover:bg-navy-600" {...previewProps(preview, c.imageNormal ?? c.imageSmall, c.name)} tabIndex={0} title={`${c.reason}${c.edhrec ? " · EDHREC pick" : ""}`}>
         <span className="flex min-w-0 items-center gap-2">
@@ -280,12 +321,23 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
         <span className="flex shrink-0 items-center gap-2">
           <ManaCost cost={c.manaCost} size={16} />
           <span className="w-14 text-right text-[14px] text-muted">{fmt(c.priceUsd)}</span>
+          {action && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); if (action === "add") edit.addEntry(c); else edit.remove(c); }}
+              aria-label={action === "add" ? `Add ${c.name} to the deck` : `Take ${c.name} out`}
+              title={action === "add" ? `Add ${c.name} to the deck` : `Take ${c.name} out`}
+              className="inline-flex h-7 w-7 items-center justify-center text-cream-dim hover:bg-navy-900 hover:text-orange focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange"
+            >
+              <Sprite grid={action === "add" ? GLYPH_PLUS : GLYPH_CROSS} scale={2} />
+            </button>
+          )}
         </span>
       </li>
     );
   }
 
-  function Group({ label, cards }: { label: string; cards: DeckEntry[] }) {
+  function Group({ label, cards, action }: { label: string; cards: DeckEntry[]; action?: "add" | "remove" }) {
     const n = cards.reduce((s, c) => s + c.quantity, 0);
     return (
       <div className="mb-5">
@@ -294,7 +346,7 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
         </h3>
         <ul className="grid gap-[2px] xl:grid-cols-2">
           {cards.map((c) => (
-            <Row key={c.name} c={c} />
+            <Row key={c.name} c={c} action={action} />
           ))}
         </ul>
       </div>

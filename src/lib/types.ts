@@ -295,6 +295,8 @@ export interface BuiltDeck {
   inUse?: boolean;
   /** Public share link id (/d/<id>), once shared. */
   shareId?: string;
+  /** Last hand edit or applied re-evaluation. */
+  editedAt?: number;
 }
 
 export interface SwapReason {

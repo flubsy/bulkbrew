@@ -39,6 +39,11 @@ const STRATEGY: Partial<Record<ThemeId | string, string>> = {
 
 const LABEL = Object.fromEntries(THEMES.map((t) => [t.id, t.label])) as Record<string, string>;
 
+/** "a, b and c" */
+function list(items: string[], last = "and") {
+  return items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} ${last} ${items[items.length - 1]}`;
+}
+
 function names(list: DeckEntry[], n: number) {
   return list.slice(0, n).map((c) => c.name);
 }
@@ -63,19 +68,23 @@ export function buildPrimer(deck: Pick<BuiltDeck, "cards" | "commanders" | "stat
   const tagKey = deck.options.edhrecTag ?? (deck.options.tribe ? "tribal" : themeIds[0]);
   const strategy = (tagKey && STRATEGY[tagKey]) || (themeIds[0] && STRATEGY[themeIds[0]]) || (wants[0] && STRATEGY[wants[0].theme]);
 
+  // One line per idea: the strategy, what the commander asks for, then tempo (when it lands and the curve).
   const plan: string[] = [];
   if (strategy) plan.push(strategy);
-  for (const w of wants) plan.push(`${cmd} cares about ${LABEL[w.theme]?.toLowerCase() ?? w.theme}: “${w.quote}”`);
+  if (wants.length) {
+    const themes = wants.map((w) => LABEL[w.theme]?.toLowerCase() ?? w.theme);
+    plan.push(`${cmd} cares about ${list(themes)}: “${wants[0].quote}”`);
+  }
   const cmdTurn = cmdCard ? Math.max(2, Math.round(cmdCard.cmc - Math.min(2, ramp / 6))) : null;
-  if (cmdTurn) plan.push(`With ${ramp} ramp pieces and ${lands} lands, expect to cast ${cmd} around turn ${cmdTurn}.`);
-  if (deck.stats.avgCmc >= 3.6) plan.push(`The curve is high (average ${deck.stats.avgCmc.toFixed(2)}), so prioritise ramp in your opening hand.`);
-  else if (deck.stats.avgCmc <= 2.8) plan.push(`The curve is low (average ${deck.stats.avgCmc.toFixed(2)}), so you can deploy several spells a turn from turn 3.`);
+  const curve = deck.stats.avgCmc >= 3.6 ? `a high curve (${deck.stats.avgCmc.toFixed(2)}), so keep ramp-heavy hands` : deck.stats.avgCmc <= 2.8 ? `a low curve (${deck.stats.avgCmc.toFixed(2)}), so you can cast several spells a turn from turn 3` : "";
+  if (cmdTurn) plan.push(`${ramp} ramp and ${lands} lands put ${cmd} out around turn ${cmdTurn}${curve ? `, with ${curve}` : ""}.`);
+  else if (curve) plan.push(`The deck has ${curve}.`);
 
   // ---- Key cards: the engines that make the deck tick.
   const keyCards = [...nonLand]
     .filter((c) => c.role !== "ramp" || (c.edhrec?.synergy ?? 0) > 0.2)
     .sort((a, b) => strength(b) - strength(a))
-    .slice(0, 6)
+    .slice(0, 4)
     .map((c) => ({ name: c.name, why: c.reason }));
 
   // ---- Win conditions.
@@ -88,37 +97,38 @@ export function buildPrimer(deck: Pick<BuiltDeck, "cards" | "commanders" | "stat
   }
   if (deck.options.themes.includes("voltron")) winCons.unshift({ name: cmd, how: "Commander damage: 21 from your commander knocks a player out." });
 
-  // ---- Mulligan.
+  // ---- Mulligan: one rule of thumb, one line of what to look for.
   const cheapRamp = nonLand.filter((c) => c.role === "ramp" && c.cmc <= 2).sort((a, b) => a.cmc - b.cmc || strength(b) - strength(a));
-  const cheapDraw = nonLand.filter((c) => c.role === "draw" && c.cmc <= 3);
+  const cheapDraw = nonLand.filter((c) => c.role === "draw" && c.cmc <= 3).sort((a, b) => strength(b) - strength(a));
+  const openers = [...names(cheapRamp, 3), ...names(cheapDraw, 1)];
   const mulligan = [
-    `Keep 7-card hands with ${lands >= 38 ? "3–5" : "3–4"} lands and at least one early play.`,
-    cheapRamp.length ? `Best openers: ${names(cheapRamp, 4).join(", ")}.` : "There's little cheap ramp, so lean on land drops and keep 4-landers happily.",
-    "Mulligan hands with 0–1 or 6+ lands, and hands where nothing is castable before turn 4.",
+    `Keep ${lands >= 38 ? "3–5" : "3–4"} lands with something to cast by turn 3; send back 0–1 or 6+ landers.`,
+    openers.length ? `Hands with ${list(openers, "or")} are the ones you want.` : "There's little cheap ramp, so keep hands on land drops and be happy with four lands.",
   ];
-  if (cheapDraw.length) mulligan.push(`Early card draw like ${names(cheapDraw, 2).join(" or ")} makes a slow hand keepable.`);
 
   // ---- Phases.
   const early = nonLand.filter((c) => c.cmc <= 2).sort((a, b) => strength(b) - strength(a));
   const mid = nonLand.filter((c) => c.cmc >= 3 && c.cmc <= 4 && c.role !== "wipe").sort((a, b) => strength(b) - strength(a));
   const late = nonLand.filter((c) => c.cmc >= 5 || c.role === "finisher").sort((a, b) => strength(b) - strength(a));
   const phases: Primer["phases"] = [
-    { label: "Early game (turns 1–3)", cards: names(early, 5), tip: "Ramp and set up. Don't overextend into board wipes." },
-    { label: "Mid game (turns 4–6)", cards: names(mid, 5), tip: `Land ${cmd} and your engines; hold removal for the real threats.` },
-    { label: "Late game", cards: names(late, 5), tip: "Cast your finishers when opponents are tapped out or after a wipe." },
+    { label: "Early game (turns 1–3)", cards: names(early, 3), tip: "Ramp and set up; don't overextend into a wipe." },
+    { label: "Mid game (turns 4–6)", cards: names(mid, 3), tip: `Land ${cmd} and your engines; save removal for real threats.` },
+    { label: "Late game", cards: names(late, 3), tip: "Cast finishers when opponents are tapped out." },
   ];
 
-  // ---- Weak spots.
+  // ---- Weak spots: the thin categories in one line, then at most one more warning.
+  const thin: string[] = [];
+  if (count("wipe") < 2) thin.push(`${count("wipe")} board wipe${count("wipe") === 1 ? "" : "s"}`);
+  if (count("draw") < 8) thin.push(`${count("draw")} card draw`);
+  if (count("removal") < 6) thin.push(`${count("removal")} spot removal`);
   const watchOut: string[] = [];
-  if (count("wipe") < 2) watchOut.push(`Only ${count("wipe")} board wipe${count("wipe") === 1 ? "" : "s"}: if someone else goes wide fast, you can fall behind.`);
-  if (count("draw") < 8) watchOut.push(`${count("draw")} card-draw pieces is on the low side; you can run out of gas in long games.`);
-  if (count("removal") < 6) watchOut.push(`${count("removal")} spot removal spells means you'll struggle against a single scary permanent.`);
-  if (count("protection") < 2 && (deck.options.themes.includes("voltron") || wants.length)) watchOut.push(`Few ways to protect ${cmd}; expect it to eat removal.`);
-  if (count("counter") === 0 && cmdCard?.colorIdentity.includes("U")) watchOut.push("No counterspells despite playing blue: you can't stop a game-winning spell on the stack.");
-  if (combos.length && (deck.options.bracket ?? 3) <= 3) watchOut.push(`Contains ${combos.length} combo${combos.length === 1 ? "" : "s"}; tell your pod if you're playing at bracket ${deck.options.bracket ?? 3}.`);
+  if (thin.length) watchOut.push(`Light on ${list(thin)}: ${thin.length > 1 ? "long games and fast boards can get away from you" : count("wipe") < 2 ? "a fast board can get away from you" : count("draw") < 8 ? "you can run out of gas in long games" : "one scary permanent can be hard to answer"}.`);
+  if (combos.length && (deck.options.bracket ?? 3) <= 3) watchOut.push(`Has ${combos.length} combo${combos.length === 1 ? "" : "s"}; tell your pod at bracket ${deck.options.bracket ?? 3}.`);
+  else if (count("protection") < 2 && (deck.options.themes.includes("voltron") || wants.length)) watchOut.push(`Few ways to protect ${cmd}; expect it to eat removal.`);
+  else if (count("counter") === 0 && cmdCard?.colorIdentity.includes("U")) watchOut.push("No counterspells despite blue, so nothing stops a winning spell on the stack.");
 
   const theme = tagLabel ?? (deck.options.tribe ? `${deck.options.tribe} tribal` : themeIds.map((t) => LABEL[t]).filter(Boolean).join(" / "));
   const summary = `${cmd}${theme ? ` ${theme}` : ""}: ${strategy ? strategy.split(/[,.;]/)[0].toLowerCase() : "a goodstuff build"}. Power ${deck.stats.power?.score ?? "?"}/10.`;
 
-  return { summary, plan, keyCards, winCons: winCons.slice(0, 5), mulligan, phases, watchOut };
+  return { summary, plan, keyCards, winCons: winCons.slice(0, 3), mulligan, phases, watchOut };
 }
