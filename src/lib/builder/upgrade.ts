@@ -31,6 +31,8 @@ export interface UpgradeInput {
   upgrade: UpgradeOptions;
   ed: EdhrecContext;
   unresolved: string[];
+  /** Combos already in the list that the target bracket doesn't allow (one piece gets cut). */
+  breakCombos?: Combo[];
 }
 
 const COLORS: Color[] = ["W", "U", "B", "R", "G"];
@@ -82,6 +84,30 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
     if (why === "illegal" || why === "offColor") c.ineligible = why;
     return { c, qty: quantity, basic: isBasic(card.name), adj: landAdj(c) };
   });
+  // ---- Downgrade: anything the target bracket doesn't allow must go, like an illegal card.
+  // No toggle: picking a lower bracket than the deck is at IS the request to bring it down.
+  const bracketWhy = new Map<string, string>();
+  const markBracket = (s: Slot, why: string) => {
+    if (s.c.ineligible || protect.has(s.c.card.name.toLowerCase())) return;
+    s.c.ineligible = "bracket";
+    bracketWhy.set(s.c.card.name, why);
+  };
+  const label = `bracket ${bracket}${BRACKETS[bracket - 1] ? ` (${BRACKETS[bracket - 1].label.split(" · ")[1]})` : ""}`;
+  for (const s of slots) {
+    if (bracket <= 2 && s.c.flagged.includes("extra turn")) markBracket(s, `Extra-turn card: ${label} doesn't allow them.`);
+    if (bracket <= 3 && s.c.flagged.includes("mass land denial")) markBracket(s, `Mass land denial: not allowed below bracket 4.`);
+    if (bracket === 1 && s.c.flagged.includes("fast mana")) markBracket(s, `Fast mana: ${label} keeps it out.`);
+  }
+  const gcSlots = slots.filter((s) => s.c.flagged.includes("game changer")).sort((a, b) => b.c.score - a.c.score);
+  for (const s of gcSlots.slice(gcCap)) markBracket(s, gcCap === 0 ? `Game changer: ${label} allows none.` : `Game changer over the limit: ${label} allows ${gcCap} and the list had ${gcSlots.length}. Kept the strongest ${gcCap}.`);
+  for (const combo of input.breakCombos ?? []) {
+    const pieces = slots.filter((s) => combo.cards.some((n) => n.toLowerCase() === s.c.card.name.toLowerCase()));
+    if (!pieces.length || pieces.some((p) => p.c.ineligible === "bracket")) continue;
+    const weakest = [...pieces].sort((a, b) => a.c.score - b.c.score)[0];
+    markBracket(weakest, `Half of a two-card combo (${combo.cards.join(" + ")}: ${combo.produces[0] ?? "infinite"}). ${label} doesn't allow them.`);
+  }
+  const downgradeCuts = bracketWhy.size;
+
   const inDeck = new Set(slots.map((s) => s.c.card.name.toLowerCase()));
   for (const c of commanders) inDeck.add(c.name.toLowerCase());
 
@@ -128,9 +154,12 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
 
   const ineligibleLeft = () => slots.some((s) => s.qty > 0 && s.c.ineligible);
 
-  for (let iter = 0; iter < upgrade.maxSwaps + 20; iter++) {
+  // Forced swaps (illegal, off-colour, over the bracket) don't count towards the swap limit.
+  let voluntary = 0;
+  const forcedTotal = slots.filter((s) => s.c.ineligible).length;
+  for (let iter = 0; iter < upgrade.maxSwaps + forcedTotal + 20; iter++) {
     const mustFix = ineligibleLeft();
-    if (!mustFix && swaps.length >= upgrade.maxSwaps) break;
+    if (!mustFix && voluntary >= upgrade.maxSwaps) break;
 
     let best: { inC: Candidate; out: Slot; gain: number; raw: number } | null = null;
     for (const inC of topBench) {
@@ -165,7 +194,8 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
       // Nothing can replace a forced cut — cut it anyway and note it.
       const bad = slots.find((s) => s.qty > 0 && s.c.ineligible);
       if (bad) {
-        forcedCuts.push({ name: bad.c.card.name, why: `${bad.c.ineligible === "illegal" ? `not legal in ${meta.label}` : "outside the commander's colour identity"}; nothing in your collection could replace it` });
+        const why = bad.c.ineligible === "illegal" ? `not legal in ${meta.label}` : bad.c.ineligible === "bracket" ? (bracketWhy.get(bad.c.card.name) ?? "above the target bracket").replace(/\.$/, "") : "outside the commander's colour identity";
+        forcedCuts.push({ name: bad.c.card.name, why: `${why}; nothing in your collection could replace it` });
         bad.qty = 0;
         continue;
       }
@@ -176,7 +206,8 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
     // Apply.
     const { inC, out } = best;
     const whyIn = reasonsIn(inC, out.c, ed, cmdName, q, roleCount, gcCount, gcCap, bracket);
-    const whyOut = reasonsOut(out.c, inC, ed, cmdName, q, roleCount, meta.label);
+    const whyOut = reasonsOut(out.c, inC, ed, cmdName, q, roleCount, meta.label, bracketWhy.get(out.c.card.name));
+    if (!out.c.ineligible) voluntary++;
     const outEntry = toEntry(out.c, 1, describe(out.c, ed));
     out.qty -= 1;
     roleCount[out.c.role] = (roleCount[out.c.role] ?? 0) - 1;
@@ -198,7 +229,8 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
     `Compared your ${slots.length - swaps.length} unique cards against ${bench.length} eligible cards from your collection.`,
     `EDHREC match (non-land cards that EDHREC lists for ${cmdName}): ${before.edhrecMatch}% → ${after.edhrecMatch}%.`,
   ];
-  if (swaps.length < upgrade.maxSwaps && !ineligibleLeft()) notes.push(`Stopped at ${swaps.length} swaps: no remaining card in your collection beats a card in the list by at least ${upgrade.minGain} points.`);
+  if (downgradeCuts) notes.unshift(`Brought the list down to ${label}: ${downgradeCuts} card${downgradeCuts === 1 ? "" : "s"} it doesn't allow ${downgradeCuts === 1 ? "was" : "were"} swapped out first (these don't count towards your swap limit).`);
+  if (voluntary < upgrade.maxSwaps && !ineligibleLeft()) notes.push(`Stopped at ${voluntary} upgrade swaps: no remaining card in your collection beats a card in the list by at least ${upgrade.minGain} points.`);
   const warnings: string[] = [];
   if (input.unresolved.length) warnings.push(`Couldn't find on Scryfall (ignored): ${input.unresolved.slice(0, 10).join(", ")}${input.unresolved.length > 10 ? "…" : ""}`);
   if (bracket <= 3 && gcCount > gcCap) warnings.push(`The list has ${gcCount} game changers; ${BRACKETS[bracket - 1].label} allows ${gcCap}. The upgrade didn't add any, but you may want to cut some.`);
@@ -263,9 +295,10 @@ function reasonsIn(c: Candidate, out: Candidate, ed: EdhrecContext, cmd: string,
   return r;
 }
 
-function reasonsOut(c: Candidate, inC: Candidate, ed: EdhrecContext, cmd: string, q: Partial<Record<Role, number>>, roleCount: Record<string, number>, formatLabel: string): SwapReason[] {
+function reasonsOut(c: Candidate, inC: Candidate, ed: EdhrecContext, cmd: string, q: Partial<Record<Role, number>>, roleCount: Record<string, number>, formatLabel: string, bracketWhy?: string): SwapReason[] {
   const r: SwapReason[] = [];
   const f = c.facts;
+  if (c.ineligible === "bracket" && bracketWhy) r.push({ kind: "bracket", text: bracketWhy });
   if (c.ineligible === "illegal") r.push({ kind: "legality", text: `Not legal in ${formatLabel}.` });
   if (c.ineligible === "offColor") r.push({ kind: "legality", text: `Outside ${cmd}'s colour identity.` });
   if (ed.cards.length) {
@@ -283,11 +316,12 @@ function reasonsOut(c: Candidate, inC: Candidate, ed: EdhrecContext, cmd: string
 }
 
 /** Combos you could complete from your collection, given the upgraded list. */
-export function comboSuggestions(included: Combo[], deckNames: Set<string>, bracket: number): Combo[] {
+export function comboSuggestions(included: Combo[], deckNames: Set<string>, ownedNames: Set<string>, bracket: number): Combo[] {
   if (bracket <= 2) return [];
+  const has = (set: Set<string>, n: string) => set.has(n.toLowerCase()) || set.has(n.split(" // ")[0].toLowerCase());
   return included
-    .map((c) => ({ ...c, missing: c.cards.filter((n) => !deckNames.has(n.toLowerCase())) }))
-    .filter((c) => c.missing.length > 0 && c.missing.length <= 2 && c.missing.length < c.cards.length)
+    .map((c) => ({ ...c, missing: c.cards.filter((n) => !has(deckNames, n)) }))
+    .filter((c) => c.missing.length > 0 && c.missing.length <= 2 && c.missing.length < c.cards.length && c.missing.every((n) => has(ownedNames, n)))
     .sort((a, b) => a.missing.length - b.missing.length || (b.popularity ?? 0) - (a.popularity ?? 0))
     .slice(0, 8);
 }

@@ -10,10 +10,12 @@ import { DeckView } from "./deck-view";
 import { PowerMeter } from "./power-meter";
 import { currentPower } from "@/lib/builder/power";
 import { Button, Panel } from "./ui";
+import { useCurrency } from "./currency-provider";
 
 export function SavedDecks() {
   const builds = useLiveQuery(() => db.builds.orderBy("createdAt").reverse().toArray(), []);
   const [open, setOpen] = useState<BuiltDeck | null>(null);
+  const { fmt } = useCurrency();
 
   if (open) {
     return (
@@ -54,7 +56,7 @@ export function SavedDecks() {
                       {b.options.themes.length ? ` · ${b.options.themes.join(", ")}` : ""}
                     </div>
                     <div className="mt-1 text-[15px] text-cream-dim">
-                      {new Date(b.createdAt).toLocaleDateString()} · {b.engine === "ai" ? "AI" : "rules"} · ${Math.round(b.stats.priceUsd)}
+                      {new Date(b.createdAt).toLocaleDateString()} · {b.engine === "ai" ? "AI" : "rules"} · {fmt(b.stats.priceUsd, { whole: true })}
                     </div>
                     {b.cards.length > 0 && <div className="mt-2"><PowerMeter power={currentPower(b)} /></div>}
                   </div>
@@ -63,6 +65,7 @@ export function SavedDecks() {
                   <Button size="sm" onClick={() => setOpen(b)}>open</Button>
                   <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(deckToText(b))}>copy</Button>
                   <Button size="sm" variant="ghost" onClick={() => download(`${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.txt`, deckToText(b))}>.txt</Button>
+                  <Button size="sm" variant="ghost" aria-pressed={!!b.inUse} onClick={() => db.builds.update(b.id, { inUse: !b.inUse || undefined })} title="Mark decks you've actually put together, so Build and Upgrade can keep their cards out">{b.inUse ? "✓ built" : "mark built"}</Button>
                   <Button size="sm" variant="ghost" onClick={() => { if (confirm(`Delete "${title}"?`)) db.builds.delete(b.id); }}>delete</Button>
                 </div>
               </li>

@@ -52,9 +52,13 @@ const RESULT_SCHEMA = {
   },
 };
 
-/** AI is opt-in per server: needs a key, and DECKBIT_DISABLE_AI=1 turns it off even with one (e.g. when friends use it). */
+/**
+ * AI is opt-in per server: needs a key, and BULKBREW_DISABLE_AI=1 turns it off even with one (e.g. when
+ * friends use it). The old DECKBIT_DISABLE_AI name still works so existing Vercel settings keep working.
+ */
 export function aiAvailable(): boolean {
-  if (process.env.DECKBIT_DISABLE_AI === "1" || process.env.DECKBIT_DISABLE_AI === "true") return false;
+  const off = process.env.BULKBREW_DISABLE_AI ?? process.env.DECKBIT_DISABLE_AI;
+  if (off === "1" || off === "true") return false;
   return !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 }
 

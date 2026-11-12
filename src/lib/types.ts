@@ -288,6 +288,10 @@ export interface BuiltDeck {
   name?: string;
   /** Set when this deck came from the upgrade tool. */
   upgrade?: UpgradeSummary;
+  /** Marked "built" (sleeved up in real life): its cards can be kept out of other builds. */
+  inUse?: boolean;
+  /** Public share link id (/d/<id>), once shared. */
+  shareId?: string;
 }
 
 export interface SwapReason {

@@ -39,7 +39,7 @@ export async function POST(req: Request) {
 
   if (opts.useAI) {
     if (!aiAvailable()) {
-      deck.warnings.push("AI pass skipped: AI is off on this server (no ANTHROPIC_API_KEY, or DECKBIT_DISABLE_AI is set).");
+      deck.warnings.push("AI pass skipped: AI is off on this server (no ANTHROPIC_API_KEY, or BULKBREW_DISABLE_AI is set).");
     } else {
       try {
         const commanders = deck.commanders.map((c) => pool.find((p) => p.card.name === c.name)!.card);

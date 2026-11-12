@@ -24,8 +24,8 @@ Orange is rationed: one primary button per view, section headings, active chips.
 
 ## Type
 - **Wordmark only**: Press Start 2P (the BulkBrew logo and the hero headline). Never anywhere else.
-- **UI and headings**: Pixelify Sans 600/700, 11–24px, for headings, labels, buttons, chips and nav.
-- **Body**: Pixelify Sans 400. `font-size-adjust: 0.4` normalises lowercase height, so component px sizes (14–21px) read the same in either font.
+- **UI and headings**: DotGothic16 (one weight; no faux bold), 11–24px, for headings, labels, buttons, chips and nav. `font-size-adjust: 0.54` keeps it at the widths the layout was drawn for. Replaced Pixelify Sans in Nov 2026 because Pixelify draws S/5 and Z/2 identically, which made prices and counts misreadable.
+- **Body**: DotGothic16 with `font-size-adjust: 0.48` and tabular numerals; Atkinson Hyperlegible (the Aa toggle) uses 0.4, so component px sizes (14–21px) read the same in either font.
 - **Readable mode**: the header's "Aa" toggle sets `html[data-font="readable"]`, swapping all text except the wordmark to Atkinson Hyperlegible. It's saved per device and applied before first paint by an inline script in `layout.tsx`. Readability is a product requirement (see PRODUCT.md), so body text must never return to a thin pixel face like VT323.
 
 ## Components (`src/components/ui.tsx`)

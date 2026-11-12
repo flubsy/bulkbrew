@@ -5,7 +5,7 @@ import { ratePower } from "@/lib/builder/power";
 import { buildPrimer } from "@/lib/builder/primer";
 import { comboSuggestions, upgradeDeck, type UpgradeOptions } from "@/lib/builder/upgrade";
 import { edhrecContextFor } from "@/lib/edhrec-context";
-import { fetchCollection, fetchNamed, normalizeCard } from "@/lib/scryfall";
+import { backfillPrices, fetchCollection, fetchNamed, normalizeCard } from "@/lib/scryfall";
 import { findCombos } from "@/lib/spellbook";
 import type { BuildOptions, CardData, ReferenceDeck } from "@/lib/types";
 
@@ -44,6 +44,7 @@ async function resolve(names: string[]): Promise<{ found: Map<string, CardData>;
       }
     }
   }
+  await backfillPrices([...new Set(found.values())], { maxQueries: 6 });
   return { found, missing };
 }
 
@@ -86,6 +87,13 @@ export async function POST(req: Request) {
   const ed = await edhrecContextFor(build, { ci: [...new Set(commanders.flatMap((c) => c.colorIdentity))], commanderReleased: commanders[0]?.releasedAt });
   const pool = buildPool(body.owned ?? []);
 
+  // Brackets 1–2 allow no two-card infinite combos: find the ones already in the list so the
+  // upgrade can break them (one piece is swapped out, like a game changer over the cap).
+  const bracket = build.bracket ?? 3;
+  const breakCombos = commanders.length && bracket <= 2 && !body.explainOnly
+    ? (await findCombos(commanders.map((c) => c.name), deck.filter((d) => !/Land/.test(d.card.typeLine)).map((d) => d.card.name))).included.filter((c) => c.cards.length <= 2)
+    : [];
+
   const result = upgradeDeck({
     name: body.deck.name,
     source: body.deck.url || body.deck.source,
@@ -96,16 +104,20 @@ export async function POST(req: Request) {
     upgrade: body.upgrade,
     ed,
     unresolved: resolved.missing,
+    breakCombos,
   });
 
   // Combos: present in the upgraded list, and completable from the collection.
   if (commanders.length) {
-    const deckNames = new Set(result.cards.map((c) => c.name.toLowerCase()));
+    // The commander is in the deck too (it was missing here, so combos using it showed it as "needed").
+    const deckNames = new Set([...result.cards, ...result.commanders].map((c) => c.name.toLowerCase()));
     const inList = await findCombos(commanders.map((c) => c.name), result.cards.filter((c) => c.role !== "land").map((c) => c.name));
     result.combos = inList.included.slice(0, 12);
     const benchNames = result.alternatives.map((a) => a.name);
+    const ownedNames = new Set(pool.map((p) => p.card.name.toLowerCase()));
     const withBulk = await findCombos(commanders.map((c) => c.name), [...result.cards.filter((c) => c.role !== "land").map((c) => c.name), ...benchNames]);
-    if (result.upgrade) result.upgrade.comboSuggestions = comboSuggestions(withBulk.included, deckNames, build.bracket ?? 3);
+    if (result.upgrade) result.upgrade.comboSuggestions = comboSuggestions(withBulk.included, deckNames, ownedNames, bracket);
+    if (bracket <= 2 && result.combos.some((c) => c.cards.length <= 2)) result.warnings.push(`This list still has a two-card combo, which bracket ${bracket} doesn't allow: ${result.combos.filter((c) => c.cards.length <= 2).map((c) => c.cards.join(" + ")).join("; ")}.`);
   }
 
   if (!ed.cards.length && build.useEdhrec) result.warnings.push("EDHREC had nothing for this commander (or was unreachable), so swaps are based on card quality and theme only.");
