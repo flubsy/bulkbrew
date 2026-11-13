@@ -209,3 +209,27 @@ export async function trendingCommanders(): Promise<Record<string, number>> {
   const list = page?.container?.json_dict?.cardlists?.[0]?.cardviews ?? [];
   return Object.fromEntries(list.map((c, i) => [c.name.toLowerCase(), i + 1]));
 }
+
+/** EDHREC's bracket slugs for average decks (average-decks/<commander>/<slug>). */
+export const BRACKET_SLUG: Record<number, string> = { 1: "exhibition", 2: "core", 3: "upgraded", 4: "optimized", 5: "cedh" };
+
+/**
+ * The EDHREC average deck as a decklist with quantities, for one bracket when EDHREC has it
+ * (falls back to the all-brackets average). Commander cards come first, flagged.
+ */
+export async function edhrecAverageList(commander: string, partner?: string, bracket?: number): Promise<{ cards: { name: string; quantity: number; commander?: boolean }[]; bracketUsed?: number; title?: string } | null> {
+  type Avg = { header?: string; deck?: { commander?: string[] | string; cards?: Record<string, [string, number][]> } };
+  const base = commanderBase(commander, partner);
+  const slug = bracket ? BRACKET_SLUG[bracket] : undefined;
+  const byBracket = slug ? await getPage<Avg>(`average-decks/${base}/${slug}`) : null;
+  const page = byBracket ?? (await getPage<Avg>(`average-decks/${base}`));
+  if (!page?.deck?.cards) return null;
+  const raw = page.deck.commander;
+  const commanders = (typeof raw === "string" ? [raw] : raw ?? []).filter(Boolean);
+  const cards = Object.values(page.deck.cards).flatMap((g) => g.map(([name, qty]) => ({ name, quantity: Math.max(1, Number(qty) || 1) })));
+  return {
+    cards: [...commanders.map((name) => ({ name, quantity: 1, commander: true })), ...cards.filter((c) => !commanders.includes(c.name))],
+    bracketUsed: byBracket ? bracket : undefined,
+    title: page.header,
+  };
+}

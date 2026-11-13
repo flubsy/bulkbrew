@@ -496,7 +496,7 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
   for (const e of picked) cmcCount[Math.min(6, Math.floor(e.cmc))] = (cmcCount[Math.min(6, Math.floor(e.cmc))] ?? 0) + e.quantity;
   // Soft role ceilings so the fill stage doesn't drown the deck in one role (e.g. 30 mana dorks).
   const roleCeil: Partial<Record<Role, number>> = {
-    ramp: Math.ceil((q.ramp ?? 0) * 1.4) + 2,
+    ramp: (q.ramp ?? 0) + 2, // ramp scores well on paper; past ~12 it crowds out the plan
     draw: Math.ceil((q.draw ?? 0) * 1.5) + 2,
     removal: Math.ceil((q.removal ?? 0) * 1.5) + 2,
     wipe: (q.wipe ?? 0) + 2,

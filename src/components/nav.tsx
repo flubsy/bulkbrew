@@ -24,6 +24,7 @@ export const SAVED_LINKS = [
   { href: "/saved", label: "Saved decks", blurb: "Everything you've built or upgraded" },
   { href: "/decks", label: "Reference decks", blurb: "Lists you scraped to teach the builder" },
   { href: "/saved/wishlist", label: "Wishlist", blurb: "Cards you're hunting for" },
+  { href: "/saved/compare", label: "Compare", blurb: "Two decks side by side, or vs EDHREC's average" },
 ] as const;
 
 function isActive(path: string, t: Tab) {

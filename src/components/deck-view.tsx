@@ -17,6 +17,7 @@ import { BuyLinks } from "./buy-links";
 import { shareDeck, sharingAvailable, shareUrl } from "@/lib/share";
 import { OwnedSearch, ReEvaluatePanel, useDeckDraft, useReEvaluate } from "./deck-edit";
 import { GLYPH_CROSS, GLYPH_PLUS, Sprite } from "./sprites";
+import { usePrintings } from "./use-printings";
 
 const ROLE_LABEL: Record<Role, string> = {
   commander: "Commander",
@@ -45,6 +46,8 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
   const [share, setShare] = useState<{ busy?: boolean; url?: string; error?: string; copied?: boolean }>({});
   const canShare = !readOnly && sharingAvailable();
   const meta = FORMATS.find((f) => f.id === deck.options.format)!;
+  const printings = usePrintings();
+  const printing = readOnly ? undefined : printings.lookup;
   const edit = useDeckDraft(deck, (d) => onChange?.(d), !readOnly);
   const reeval = useReEvaluate(deck);
   const editing = !!edit.draft;
@@ -57,7 +60,7 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
   const title = deck.name || deck.commanders.map((c) => c.name).join(" / ") || meta.label;
 
   async function copy(kind: "text" | "arena") {
-    await navigator.clipboard.writeText(deckToText(deck));
+    await navigator.clipboard.writeText(deckToText(deck, printing));
     setCopied(kind);
     setTimeout(() => setCopied(null), 1500);
   }
@@ -105,11 +108,12 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
         aside={
           <div className="flex flex-wrap gap-1">
             <Button size="sm" onClick={() => copy("text")}>{copied === "text" ? "copied" : "copy list"}</Button>
-            <Button size="sm" variant="ghost" onClick={() => download(`${slug(title)}.txt`, deckToText(deck))}>.txt</Button>
-            <Button size="sm" variant="ghost" onClick={() => download(`${slug(title)}.csv`, deckToCsv(deck), "text/csv")}>.csv</Button>
+            <Button size="sm" variant="ghost" onClick={() => download(`${slug(title)}.txt`, deckToText(deck, printing))}>.txt</Button>
+            <Button size="sm" variant="ghost" onClick={() => download(`${slug(title)}.csv`, deckToCsv(deck, printing), "text/csv")}>.csv</Button>
             {canShare && <Button size="sm" variant="ghost" onClick={doShare} disabled={share.busy}>{share.busy ? "sharing…" : deck.shareId ? "share link" : "share"}</Button>}
             {!readOnly && deck.cards.length > 0 && <Button size="sm" variant="ghost" onClick={editing ? edit.discard : edit.start} aria-pressed={editing}>{editing ? "stop editing" : "edit"}</Button>}
             {!readOnly && deck.commanders.length > 0 && <Button size="sm" variant="ghost" onClick={reeval.run} disabled={reeval.busy || editing} title="Check your collection for cards that would improve this deck now">{reeval.busy ? "re-evaluating…" : "re-evaluate"}</Button>}
+            {!readOnly && <a href={`/saved/compare?a=${encodeURIComponent(deck.id)}`} className="px-btn px-btn-ghost px-btn-sm inline-block" title="Compare with another deck, a Moxfield/Archidekt list, or EDHREC's average">compare</a>}
             {!readOnly && <Button size="sm" variant="ghost" onClick={toggleBuilt} aria-pressed={!!deck.inUse} title="Mark decks you've actually put together, so their cards can be kept out of other builds">{deck.inUse ? "✓ built" : "mark built"}</Button>}
           </div>
         }
@@ -141,6 +145,12 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
             </div>
             <Button size="sm" variant="ghost" onClick={saveName}>save</Button>
           </div>
+        )}
+        {!readOnly && (
+          <label className="mt-3 flex items-center gap-3 text-[16px] text-cream-dim">
+            <input type="checkbox" className="h-4 w-4 accent-orange" checked={printings.on} onChange={(e) => printings.setOn(e.target.checked)} />
+            Exports include your printings (set, number, foil), so Moxfield and Archidekt show your art. Turn off for Arena and MTGO.
+          </label>
         )}
       </Panel>
 

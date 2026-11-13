@@ -46,12 +46,34 @@ export async function POST(req: Request) {
       const inDeck = new Set([...deck.cards, ...deck.commanders].map((c) => lower(c.name)));
       const bench = new Set(deck.alternatives.map((c) => lower(c.name)));
       const found = await findCombos(deck.commanders.map((c) => c.name), [...deck.cards.filter((c) => c.role !== "land").map((c) => c.name), ...deck.alternatives.map((c) => c.name)]);
+      // Prefer a coherent package: cheap pieces, the commander as a piece, pieces shared with
+      // combos already in the list, and few new cards. Slow, scattered lines are skipped.
+      const cmcOf = new Map([...deck.cards, ...deck.alternatives, ...deck.commanders].map((c) => [lower(c.name), c.cmc]));
+      const cmdNames = new Set(deck.commanders.map((c) => lower(c.name)));
+      const present = found.included.filter((c) => c.cards.every((n) => inDeck.has(lower(n))));
+      // Same test the power model uses (comboCoherence): tutors + a quarter of the draw.
+      const roleN = (r: string) => deck.cards.filter((c) => c.role === r).reduce((n, c) => n + c.quantity, 0);
+      const support = roleN("tutor") + Math.floor(roleN("draw") / 4);
+      const presentPieces = new Set(present.flatMap((c) => c.cards.map(lower)));
       const options = found.included
         .filter((c) => bracket >= 4 || c.cards.length >= 3)
-        .map((c) => ({ c, need: c.cards.filter((n) => !inDeck.has(lower(n))) }))
-        .filter((x) => x.need.length > 0 && x.need.length <= 2 && x.need.every((n) => bench.has(lower(n))))
-        .sort((a, b) => a.need.length - b.need.length || (b.c.popularity ?? 0) - (a.c.popularity ?? 0));
-      const picked = options.slice(0, bracket >= 4 ? 2 : 1);
+        .map((c) => {
+          const need = c.cards.filter((n) => !inDeck.has(lower(n)));
+          const cost = c.cards.reduce((s, n) => s + (cmdNames.has(lower(n)) ? 0 : cmcOf.get(lower(n)) ?? 3), 0);
+          const usesCommander = c.cards.some((n) => cmdNames.has(lower(n)));
+          const sharesPiece = c.cards.some((n) => presentPieces.has(lower(n)) && !cmdNames.has(lower(n)));
+          const score = (usesCommander ? 4 : 0) + (sharesPiece ? 3 : 0) - need.length * 2 - Math.max(0, cost - 5) + Math.log10((c.popularity ?? 0) + 1);
+          return { c, need, cost, score, usesCommander, sharesPiece };
+        })
+        .filter((x) => x.need.length > 0 && x.need.length <= 2 && x.need.every((n) => bench.has(lower(n))) && x.cost <= 7 && (x.usesCommander || x.sharesPiece || support >= 4))
+        .sort((a, b) => b.score - a.score);
+      const picked: typeof options = [];
+      for (const o of options) {
+        if (picked.length >= (bracket >= 4 ? 2 : 1)) break;
+        // A second line must share a piece with the first, or it's a separate package to assemble.
+        if (picked.length && !o.c.cards.some((n) => picked[0].c.cards.map(lower).includes(lower(n)))) continue;
+        picked.push(o);
+      }
       const need = [...new Set(picked.flatMap((p) => p.need))];
       if (need.length) {
         const rebuilt = buildHeuristic(pool, { ...opts, includeCards: [...opts.includeCards, ...need] }, refs, ed);
