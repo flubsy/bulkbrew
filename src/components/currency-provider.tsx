@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Select } from "./select";
 import { CURRENCIES, FALLBACK_RATES, formatMoney, guessCurrency, isCurrency, symbolOf, type CurrencyCode, type Rates } from "@/lib/currency";
 
 const KEY = "deckbit.currency";
@@ -72,11 +73,10 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 export function CurrencyPicker() {
   const { code, setCode } = useCurrency();
   return (
-    <label className="px-chip px-border !px-0 !py-0" title="Currency for prices">
-      <span className="sr-only">Currency</span>
-      <select value={code} onChange={(e) => setCode(e.target.value as CurrencyCode)} className="cursor-pointer appearance-none bg-transparent px-2 py-1 text-[14px] text-cream-dim outline-none">
-        {CURRENCIES.map((c) => <option key={c.code} value={c.code} className="bg-navy-900">{c.code}</option>)}
-      </select>
-    </label>
+    <span className="px-chip px-border inline-block !px-0 !py-0" title="Currency for prices">
+      <Select value={code} onChange={(e) => setCode(e.target.value as CurrencyCode)} aria-label="Currency" className="!m-0 !w-auto !bg-transparent !py-1 !pl-2 !pr-8 !text-[14px] !text-cream-dim ![box-shadow:none]">
+        {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code}</option>)}
+      </Select>
+    </span>
   );
 }

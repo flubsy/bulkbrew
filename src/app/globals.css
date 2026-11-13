@@ -208,7 +208,7 @@ body {
 }
 .px-input:focus { --px-border-color: var(--orange); }
 .px-input::placeholder { color: var(--muted); }
-select.px-input { appearance: none; padding-right: 36px; background-image: linear-gradient(45deg, transparent 50%, var(--orange) 50%), linear-gradient(135deg, var(--orange) 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 12px) 50%; background-size: 8px 8px; background-repeat: no-repeat; }
+select.px-input, .px-select { appearance: none; padding-right: 36px; background-image: linear-gradient(45deg, transparent 50%, var(--orange) 50%), linear-gradient(135deg, var(--orange) 50%, transparent 50%); background-position: calc(100% - 20px) 50%, calc(100% - 12px) 50%; background-size: 8px 8px; background-repeat: no-repeat; }
 textarea.px-input { line-height: 1.15; }
 
 /* Chips (toggleable tags) */
@@ -354,7 +354,9 @@ textarea.px-input { line-height: 1.15; }
   position: fixed;
   z-index: 60;
   pointer-events: none;
-  top: 96px;
+  top: 0;
+  left: 0;
+  will-change: transform;
   width: 244px;
   background: var(--navy-900);
   --px-border-color: var(--orange);

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
 
 /* Small 8-bit UI kit. Every control sits on the 4px grid and uses the notched px-border. */
 
@@ -31,13 +31,8 @@ export function Input({ className = "", ...rest }: InputHTMLAttributes<HTMLInput
   return <input className={`px-input px-border ${className}`} {...rest} />;
 }
 
-export function Select({ className = "", children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select className={`px-input px-border ${className}`} {...rest}>
-      {children}
-    </select>
-  );
-}
+// App-drawn dropdown with the <select> API (see select.tsx).
+export { Select } from "./select";
 
 export function TextArea({ className = "", ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea className={`px-input px-border ${className}`} {...rest} />;

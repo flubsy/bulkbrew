@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 /**
  * Hover (desktop) / tap (mobile) card image preview.
@@ -20,12 +20,24 @@ export function useCardPreview() {
   return useContext(PreviewContext);
 }
 
+const W = 244;
+const H = 340;
+
+/** Where the preview goes for a pointer at (x, y): beside the cursor, flipped and clamped to stay on screen. */
+function spot(x: number, y: number) {
+  const left = x + 20 + W > window.innerWidth ? x - W - 20 : x + 20;
+  const top = Math.max(8, Math.min(window.innerHeight - H - 8, y - H / 2));
+  return `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+}
+
 export function CardPreviewProvider({ children }: { children: ReactNode }) {
-  // Docked to the side of the screen away from the pointer: no mouse tracking, so hovering a row
-  // costs one small render of the dock, not a re-render of the page.
-  const [hover, setHover] = useState<{ url: string; name: string; side: "left" | "right" } | null>(null);
+  // Follows the cursor, but the position is written straight to the element once per frame:
+  // React only re-renders when the card changes, never on mouse movement.
+  const [hover, setHover] = useState<{ url: string; name: string } | null>(null);
   const [modal, setModal] = useState<{ url: string; name: string } | null>(null);
   const touch = useRef(false);
+  const box = useRef<HTMLDivElement>(null);
+  const point = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     touch.current = window.matchMedia("(hover: none)").matches;
@@ -33,20 +45,40 @@ export function CardPreviewProvider({ children }: { children: ReactNode }) {
 
   const show = useCallback<Ctx["show"]>((url, name, e) => {
     if (!url || touch.current) return;
-    const side = (e?.clientX ?? 0) > window.innerWidth * 0.55 ? "left" : "right";
-    setHover((h) => (h?.url === url && h.side === side ? h : { url, name, side }));
+    point.current = { x: e?.clientX ?? 0, y: e?.clientY ?? 0 };
+    if (box.current) box.current.style.transform = spot(point.current.x, point.current.y);
+    setHover((h) => (h?.url === url ? h : { url, name }));
   }, []);
   const hide = useCallback(() => setHover(null), []);
   const open = useCallback<Ctx["open"]>((url, name) => url && setModal({ url, name }), []);
   const value = useMemo(() => ({ show, hide, open }), [show, hide, open]);
 
+  // Place it before paint when it appears, then track the pointer while it's shown.
+  useLayoutEffect(() => {
+    if (hover && box.current) box.current.style.transform = spot(point.current.x, point.current.y);
+  }, [hover]);
+  useEffect(() => {
+    if (!hover) return;
+    let frame = 0;
+    const move = (e: MouseEvent) => {
+      point.current = { x: e.clientX, y: e.clientY };
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (box.current) box.current.style.transform = spot(point.current.x, point.current.y);
+      });
+    };
+    window.addEventListener("mousemove", move, { passive: true });
+    return () => { window.removeEventListener("mousemove", move); if (frame) cancelAnimationFrame(frame); };
+  }, [hover]);
+
   return (
     <PreviewContext.Provider value={value}>
       {children}
       {hover && (
-        <div className="card-preview px-border" style={hover.side === "right" ? { right: 16 } : { left: 16 }} aria-hidden>
+        <div ref={box} className="card-preview px-border" aria-hidden>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={hover.url} alt="" width={244} height={340} />
+          <img src={hover.url} alt="" width={W} height={H} />
         </div>
       )}
       {modal && (
