@@ -79,10 +79,11 @@ export function CollectionManager() {
     return { cards, value, unmatched, unpriced, legendary, unique: groups.length };
   }, [owned]);
 
+  // Grouping and the commander check run once per collection change, not on every keystroke.
+  const allGroups = useMemo(() => (owned ? groupOwned(owned).map((g) => ({ g, commander: !!g.card && isCommanderCard(g.card, "commander"), staple: isStaple(g.card) })) : []), [owned]);
   const { groups, basics } = useMemo(() => {
-    if (!owned) return { groups: [], basics: [] };
     const needle = q.trim().toLowerCase();
-    const list = groupOwned(owned).filter((g) => {
+    const list = allGroups.filter(({ g, commander, staple }) => {
       const c = g.card;
       if (needle && !g.name.toLowerCase().includes(needle) && !(c?.oracleText ?? "").toLowerCase().includes(needle) && !(c?.typeLine ?? "").toLowerCase().includes(needle)) return false;
       if (typeFilter && !(c?.typeLine ?? "").includes(typeFilter)) return false;
@@ -90,11 +91,11 @@ export function CollectionManager() {
         const ci = c?.colorIdentity ?? [];
         if (colorFilter === "C" ? ci.length !== 0 : !ci.includes(colorFilter as never)) return false;
       }
-      if (only === "commanders" && !(c && isCommanderCard(c, "commander"))) return false;
-      if (only === "staples" && !isStaple(c)) return false;
+      if (only === "commanders" && !commander) return false;
+      if (only === "staples" && !staple) return false;
       if (only === "unmatched" && g.rows.every((r) => r.card)) return false;
       return true;
-    });
+    }).map((x) => x.g);
     list.sort((a, b) => {
       if (sort === "price") return (b.priceMax ?? 0) - (a.priceMax ?? 0);
       if (sort === "qty") return b.qty - a.qty;
@@ -105,7 +106,7 @@ export function CollectionManager() {
     // Basic lands go behind one summary row unless the search is looking for them.
     const wantBasics = !!needle || typeFilter === "Basic";
     return { groups: wantBasics ? list : list.filter((g) => !g.basic), basics: wantBasics ? [] : list.filter((g) => g.basic) };
-  }, [owned, q, typeFilter, colorFilter, sort, only]);
+  }, [allGroups, q, typeFilter, colorFilter, sort, only]);
   const shownCount = groups.length + basics.length;
 
   return (
@@ -220,7 +221,7 @@ export function CollectionManager() {
               <Chip pressed={only === "staples"} onClick={() => setOnly(only === "staples" ? "" : "staples")} title={`Game changers and the ${STAPLE_RANK} most-played Commander cards on EDHREC`}>Staples</Chip>
               {stats.unmatched > 0 && <Chip pressed={only === "unmatched"} onClick={() => setOnly(only === "unmatched" ? "" : "unmatched")}>No Scryfall match</Chip>}
             </div>
-            <CollectionTable groups={groups} basics={basics} />
+            <CollectionTable key={[q, typeFilter, colorFilter, sort, only].join("|")} groups={groups} basics={basics} />
           </Panel>
         </>
       )}

@@ -69,9 +69,20 @@ export function ratePower(deck: Pick<BuiltDeck, "cards" | "commanders" | "stats"
   // --- Win speed: actual combos (Commander Spellbook), not "combo-ish" text.
   const combos = extra.combos ?? [];
   const twoCard = combos.filter((c) => c.cards.length <= 2).length;
-  const comboPts = combos.length >= 3 ? 1.5 : combos.length >= 1 ? 1 : 0;
+  let comboPts = combos.length >= 3 ? 1.5 : combos.length >= 1 ? 1 : 0;
   pts += comboPts;
   factors.push({ label: "Combos", value: combos.length ? `${combos.length} (${twoCard} two-card)` : "none found", points: comboPts });
+
+  // --- Coherence: a combo package only counts if the deck can actually assemble it. Pieces that
+  // share infrastructure (overlap, or the commander is a piece), are cheap, and have tutors and
+  // draw behind them make a real plan; scattered expensive lines with nothing to find them don't.
+  const coh = comboCoherence(deck, combos, tutors, count((c) => c.role === "draw"));
+  if (combos.length && (coh.sparse || coh.slow)) {
+    const p = coh.sparse && coh.slow ? -0.75 : -0.25;
+    pts += p;
+    comboPts += p;
+    factors.push({ label: coh.sparse && coh.slow ? "Combo package: sparse and slow" : coh.sparse ? "Combo package: sparse" : "Combo package: slow", value: coh.summary, points: p });
+  }
 
   // --- Focus: a tight synergy deck plays above its card quality.
   const nonLand = cards.filter((c) => c.role !== "land");
@@ -86,6 +97,10 @@ export function ratePower(deck: Pick<BuiltDeck, "cards" | "commanders" | "stats"
 
   // --- Ceilings: what a deck must have to reach the top of the scale.
   let max = 10;
+  if (combos.length && coh.sparse && coh.slow) {
+    max = Math.min(max, 7);
+    caps.push({ max: 7, why: `Capped at 7: the combos are slow and share no pieces (${coh.summary}), so the deck can't reliably assemble them.` });
+  }
   if (combos.length === 0 && tutors <= 1) {
     max = Math.min(max, 7);
     caps.push({ max: 7, why: "Capped at 7: no combos and at most one tutor. Strong casual decks rarely play above a 7." });
@@ -109,6 +124,23 @@ export function ratePower(deck: Pick<BuiltDeck, "cards" | "commanders" | "stats"
   // Only report the cap that actually held the score down.
   const binding = raw > score ? caps.filter((c) => c.max === score).map((c) => c.why).slice(0, 1) : [];
   return { score, label, factors, caps: binding };
+}
+
+/** How assemblable a deck's combos are. Shared with the builder so it prefers coherent packages. */
+export function comboCoherence(deck: Pick<BuiltDeck, "cards" | "commanders">, combos: Combo[], tutors: number, draw: number) {
+  const lower = (s: string) => s.toLowerCase();
+  const cmc = new Map([...deck.cards, ...deck.commanders].map((c) => [lower(c.name), c.cmc]));
+  const cmd = new Set(deck.commanders.map((c) => lower(c.name)));
+  const uses = new Map<string, number>();
+  for (const k of combos) for (const n of k.cards) uses.set(lower(n), (uses.get(lower(n)) ?? 0) + 1);
+  const shared = [...uses.values()].some((n) => n >= 2) || combos.some((k) => k.cards.some((n) => cmd.has(lower(n))));
+  const costs = combos.map((k) => k.cards.reduce((s, n) => s + (cmd.has(lower(n)) ? 0 : cmc.get(lower(n)) ?? 3), 0));
+  const avgCost = costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : 0;
+  const support = tutors + Math.floor(draw / 4);
+  const sparse = !shared && support < 4;
+  const slow = avgCost >= 8; // about two four-drops per combo
+  const summary = `${avgCost.toFixed(0)} mana of pieces per combo, ${shared ? "shared pieces" : "no shared pieces"}, ${tutors} tutors`;
+  return { shared, avgCost, support, sparse, slow, summary };
 }
 
 /** Recompute a saved deck's rating with the current formula (old saves stored the old one). */

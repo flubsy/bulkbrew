@@ -102,15 +102,17 @@ function commanderBase(commander: string, partner?: string) {
   return partner ? `${edhrecSlug(commander)}-${edhrecSlug(partner)}` : edhrecSlug(commander);
 }
 
-async function averageDeck(base: string, tag?: string): Promise<string[]> {
+async function averageDeck(base: string, tag?: string, bracket?: number): Promise<string[]> {
   type Avg = { deck?: { cards?: Record<string, [string, number][]> } };
-  const page = (tag ? await getPage<Avg>(`average-decks/${base}/${tag}`) : null) ?? (await getPage<Avg>(`average-decks/${base}`));
+  // A themed average when there is a tag; otherwise the one for the bracket (EDHREC has one per bracket).
+  const slug = bracket ? BRACKET_SLUG[bracket] : undefined;
+  const page = (tag ? await getPage<Avg>(`average-decks/${base}/${tag}`) : null) ?? (!tag && slug ? await getPage<Avg>(`average-decks/${base}/${slug}`) : null) ?? (await getPage<Avg>(`average-decks/${base}`));
   const groups = page?.deck?.cards ?? {};
   return Object.values(groups).flatMap((g) => g.map(([n]) => n));
 }
 
 /** Everything EDHREC knows about a commander, optionally narrowed to one of its tags (e.g. "dragons"). */
-export async function edhrecCommander(commander: string, partner?: string, tag?: string): Promise<CommanderInfo | null> {
+export async function edhrecCommander(commander: string, partner?: string, tag?: string, bracket?: number): Promise<CommanderInfo | null> {
   const base = commanderBase(commander, partner);
   const plain = await getPage<CommanderJson>(`commanders/${base}`);
   if (!plain) return null;
@@ -125,7 +127,7 @@ export async function edhrecCommander(commander: string, partner?: string, tag?:
     salt: card?.salt ?? null,
     tags: (plain.panels?.taglinks ?? []).map((t) => ({ slug: t.slug, label: t.value, decks: t.count })),
     cards: themedCards.length ? themedCards : flatten(plain),
-    averageDeck: await averageDeck(base, themedCards.length ? tag : undefined),
+    averageDeck: await averageDeck(base, themedCards.length ? tag : undefined, bracket),
     profile: (themedCards.length ? profileOf(themed) : undefined) ?? profileOf(plain),
     tagUsed: themedCards.length ? tag : undefined,
   };
@@ -208,4 +210,28 @@ export async function trendingCommanders(): Promise<Record<string, number>> {
   const page = await getPage<ListPage>("commanders/week");
   const list = page?.container?.json_dict?.cardlists?.[0]?.cardviews ?? [];
   return Object.fromEntries(list.map((c, i) => [c.name.toLowerCase(), i + 1]));
+}
+
+/** EDHREC's bracket slugs for average decks (average-decks/<commander>/<slug>). */
+export const BRACKET_SLUG: Record<number, string> = { 1: "exhibition", 2: "core", 3: "upgraded", 4: "optimized", 5: "cedh" };
+
+/**
+ * The EDHREC average deck as a decklist with quantities, for one bracket when EDHREC has it
+ * (falls back to the all-brackets average). Commander cards come first, flagged.
+ */
+export async function edhrecAverageList(commander: string, partner?: string, bracket?: number): Promise<{ cards: { name: string; quantity: number; commander?: boolean }[]; bracketUsed?: number; title?: string } | null> {
+  type Avg = { header?: string; deck?: { commander?: string[] | string; cards?: Record<string, [string, number][]> } };
+  const base = commanderBase(commander, partner);
+  const slug = bracket ? BRACKET_SLUG[bracket] : undefined;
+  const byBracket = slug ? await getPage<Avg>(`average-decks/${base}/${slug}`) : null;
+  const page = byBracket ?? (await getPage<Avg>(`average-decks/${base}`));
+  if (!page?.deck?.cards) return null;
+  const raw = page.deck.commander;
+  const commanders = (typeof raw === "string" ? [raw] : raw ?? []).filter(Boolean);
+  const cards = Object.values(page.deck.cards).flatMap((g) => g.map(([name, qty]) => ({ name, quantity: Math.max(1, Number(qty) || 1) })));
+  return {
+    cards: [...commanders.map((name) => ({ name, quantity: 1, commander: true })), ...cards.filter((c) => !commanders.includes(c.name))],
+    bracketUsed: byBracket ? bracket : undefined,
+    title: page.header,
+  };
 }

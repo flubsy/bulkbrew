@@ -24,15 +24,31 @@ const PALETTE: Record<string, string> = {
   x: "currentColor",
 };
 
-export function Sprite({ grid, scale = 4, className = "", title, style }: { grid: string[]; scale?: number; className?: string; title?: string; style?: React.CSSProperties }) {
+/** One <path> per colour (horizontal runs), cached per grid: far fewer DOM nodes than a rect per pixel. */
+const spriteCache = new WeakMap<string[], { w: number; h: number; paths: { fill: string; d: string }[] }>();
+function compile(grid: string[]) {
+  const hit = spriteCache.get(grid);
+  if (hit) return hit;
   const h = grid.length;
   const w = Math.max(...grid.map((r) => r.length));
-  const rects: { x: number; y: number; fill: string }[] = [];
+  const byColour = new Map<string, string>();
   grid.forEach((row, y) => {
-    [...row].forEach((ch, x) => {
-      if (ch !== "." && PALETTE[ch]) rects.push({ x, y, fill: PALETTE[ch] });
-    });
+    let x = 0;
+    while (x < row.length) {
+      const ch = row[x];
+      if (ch === "." || !PALETTE[ch]) { x++; continue; }
+      const start = x;
+      while (x < row.length && row[x] === ch) x++;
+      byColour.set(ch, (byColour.get(ch) ?? "") + `M${start} ${y}h${x - start}v1h-${x - start}z`);
+    }
   });
+  const out = { w, h, paths: [...byColour].map(([ch, d]) => ({ fill: PALETTE[ch], d })) };
+  spriteCache.set(grid, out);
+  return out;
+}
+
+export function Sprite({ grid, scale = 4, className = "", title, style }: { grid: string[]; scale?: number; className?: string; title?: string; style?: React.CSSProperties }) {
+  const { w, h, paths } = compile(grid);
   return (
     <svg
       viewBox={`0 0 ${w} ${h}`}
@@ -45,8 +61,8 @@ export function Sprite({ grid, scale = 4, className = "", title, style }: { grid
       aria-label={title}
       aria-hidden={title ? undefined : true}
     >
-      {rects.map((r, i) => (
-        <rect key={i} x={r.x} y={r.y} width={1} height={1} fill={r.fill} />
+      {paths.map((p, i) => (
+        <path key={i} d={p.d} fill={p.fill} />
       ))}
     </svg>
   );

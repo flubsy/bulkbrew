@@ -2,7 +2,7 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { creatureTypes } from "@/lib/builder/classify";
 import { detectThemes, suggestCommanders, type CommanderOption } from "@/lib/builder/commanders";
 import { db } from "@/lib/db";
@@ -13,7 +13,8 @@ import { CardPreviewProvider } from "./card-preview";
 import { fetchTags, OBSCURE, pick, useCommanderStats, weighted, type RollMode } from "./commander-picker";
 import { DeckView } from "./deck-view";
 import { ColorIdentity } from "./mana";
-import { DIE, Sprite } from "./sprites";
+import { DIE, SKULL, Sprite } from "./sprites";
+import { PowerGauntlet } from "./power-gauntlet";
 import { Button, Label, Notice, Panel, Select } from "./ui";
 
 const THEME_LABEL = Object.fromEntries(THEMES.map((t) => [t.id, t.label])) as Record<string, string>;
@@ -47,7 +48,7 @@ function Inner() {
   const cards = useMemo(() => (owned ?? []).filter((c) => c.card).map((c) => c.card!), [owned]);
   const all = useMemo(() => suggestCommanders(cards, "commander", [], undefined), [cards]);
   const { stats, loading } = useCommanderStats(all);
-  const decksOf = (c: CommanderOption) => stats[c.name.toLowerCase()]?.decks ?? 0;
+  const decksOf = useCallback((c: CommanderOption) => stats[c.name.toLowerCase()]?.decks ?? 0, [stats]);
 
   const typeCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -68,7 +69,9 @@ function Inner() {
   const [building, setBuilding] = useState(false);
   const [deck, setDeck] = useState<BuiltDeck | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gauntlet, setGauntlet] = useState(false);
 
+  const inColours = useMemo(() => all.filter((c) => !combo || comboKey(c.ci) === combo), [all, combo]);
   const combos = useMemo(() => COMBO_ORDER.filter((k) => all.some((c) => comboKey(c.ci) === k)), [all]);
 
   function poolFor() {
@@ -184,7 +187,12 @@ function Inner() {
             <input type="checkbox" className="h-5 w-5 accent-orange" checked={skipObscure} onChange={(e) => setSkipObscure(e.target.checked)} />
             Skip niche commanders (under {OBSCURE} EDHREC decks)
           </label>
-          <p className="mt-2 text-[14px] text-muted">{loading ? "Loading EDHREC popularity…" : `${all.length} commanders in your collection to roll from.`}</p>
+          <div className="mt-2 flex items-end justify-between gap-2">
+            <p className="text-[14px] text-muted">{loading ? "Loading EDHREC popularity…" : `${all.length} commanders in your collection to roll from.`}</p>
+            <button type="button" onClick={() => setGauntlet((g) => !g)} aria-label="Fuck my shit up fam: find the strongest deck you can build" title="?" className="shrink-0 opacity-25 transition-opacity hover:opacity-100 focus-visible:opacity-100">
+              <Sprite grid={SKULL} scale={2} />
+            </button>
+          </div>
         </Panel>
 
         <button type="button" onClick={() => doRoll()} disabled={rolling || !all.length} className="px-btn flex items-center justify-center gap-3 !py-5 !text-[20px]">
@@ -208,6 +216,17 @@ function Inner() {
       </div>
 
       <div className="grid content-start gap-5">
+        {gauntlet && (
+          <PowerGauntlet
+            commanders={inColours}
+            cards={cards}
+            bracket={bracket}
+            decksOf={decksOf}
+            base={BASE}
+            onOpen={(d) => setDeck(d)}
+            onClose={() => setGauntlet(false)}
+          />
+        )}
         {!roll ? (
           <Panel title="Ready when you are">
             <p className="text-[19px] text-cream-dim">Roll a random commander from your collection, along with the way most people build it on EDHREC. Or roll a theme first and let BulkBrew find a commander you own that fits. Then build it in one click.</p>

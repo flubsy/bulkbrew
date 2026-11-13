@@ -354,6 +354,7 @@ textarea.px-input { line-height: 1.15; }
   position: fixed;
   z-index: 60;
   pointer-events: none;
+  top: 96px;
   width: 244px;
   background: var(--navy-900);
   --px-border-color: var(--orange);

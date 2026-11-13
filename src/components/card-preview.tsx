@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 /**
  * Hover (desktop) / tap (mobile) card image preview.
@@ -21,7 +21,9 @@ export function useCardPreview() {
 }
 
 export function CardPreviewProvider({ children }: { children: ReactNode }) {
-  const [hover, setHover] = useState<{ url: string; name: string; x: number; y: number } | null>(null);
+  // Docked to the side of the screen away from the pointer: no mouse tracking, so hovering a row
+  // costs one small render of the dock, not a re-render of the page.
+  const [hover, setHover] = useState<{ url: string; name: string; side: "left" | "right" } | null>(null);
   const [modal, setModal] = useState<{ url: string; name: string } | null>(null);
   const touch = useRef(false);
 
@@ -31,33 +33,18 @@ export function CardPreviewProvider({ children }: { children: ReactNode }) {
 
   const show = useCallback<Ctx["show"]>((url, name, e) => {
     if (!url || touch.current) return;
-    setHover({ url, name, x: e?.clientX ?? 0, y: e?.clientY ?? 0 });
+    const side = (e?.clientX ?? 0) > window.innerWidth * 0.55 ? "left" : "right";
+    setHover((h) => (h?.url === url && h.side === side ? h : { url, name, side }));
   }, []);
   const hide = useCallback(() => setHover(null), []);
   const open = useCallback<Ctx["open"]>((url, name) => url && setModal({ url, name }), []);
-
-  useEffect(() => {
-    if (!hover) return;
-    const move = (e: MouseEvent) => setHover((h) => (h ? { ...h, x: e.clientX, y: e.clientY } : h));
-    window.addEventListener("mousemove", move);
-    return () => window.removeEventListener("mousemove", move);
-  }, [hover]);
-
-  // Keep the preview on screen.
-  let left = 0;
-  let top = 0;
-  if (hover && typeof window !== "undefined") {
-    const w = 244;
-    const h = 340;
-    left = hover.x + 20 + w > window.innerWidth ? hover.x - w - 20 : hover.x + 20;
-    top = Math.max(8, Math.min(window.innerHeight - h - 8, hover.y - h / 2));
-  }
+  const value = useMemo(() => ({ show, hide, open }), [show, hide, open]);
 
   return (
-    <PreviewContext.Provider value={{ show, hide, open }}>
+    <PreviewContext.Provider value={value}>
       {children}
       {hover && (
-        <div className="card-preview px-border" style={{ left, top }} aria-hidden>
+        <div className="card-preview px-border" style={hover.side === "right" ? { right: 16 } : { left: 16 }} aria-hidden>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={hover.url} alt="" width={244} height={340} />
         </div>

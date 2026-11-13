@@ -22,7 +22,7 @@ export async function edhrecContextFor(opts: BuildOptions, extra: { ci?: string[
   try {
     const archetypeP = tag ? edhrecForTag(tag, extra.ci).catch(() => []) : Promise.resolve([]);
     if (opts.commander) {
-      const [info, archetype] = await Promise.all([edhrecCommander(opts.commander, opts.partner, tag), archetypeP]);
+      const [info, archetype] = await Promise.all([edhrecCommander(opts.commander, opts.partner, tag, opts.format === "commander" ? opts.bracket : undefined), archetypeP]);
       if (!info) return { ...EMPTY_EDHREC, archetype };
       const tagLabel = info.tagUsed ? info.tags.find((t) => t.slug === info.tagUsed)?.label ?? info.tagUsed : undefined;
       const short = info.name.split(",")[0].split(" // ")[0];

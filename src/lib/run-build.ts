@@ -8,14 +8,14 @@ import type { BuildOptions, BuiltDeck } from "./types";
 export const BUILD_OPTIONS_KEY = "deckbit.buildOptions";
 
 /** Build a deck from the local collection via /api/build and save it. Shared by Build and Roll. */
-export async function runBuild(options: BuildOptions): Promise<{ deck: BuiltDeck; aiAvailable: boolean }> {
+export async function runBuild(options: BuildOptions, { save = true }: { save?: boolean } = {}): Promise<{ deck: BuiltDeck; aiAvailable: boolean }> {
   const all = (await db.owned.toArray()).filter((c) => c.card);
   if (!all.length) throw new Error("Import your collection first.");
   const owned = withoutReserved(all, reservedCounts(await db.builds.toArray(), readReserveMode()));
   const refs = (await db.refDecks.toArray()).filter((r) => options.referenceDeckIds.includes(r.id));
   const json = await postJson<{ deck: BuiltDeck; aiAvailable: boolean }>("/api/build", { options, owned: packCollection(owned, options.format), refs });
   const deck: BuiltDeck = json.deck;
-  await db.builds.put(deck);
+  if (save) await db.builds.put(deck);
   return { deck, aiAvailable: json.aiAvailable };
 }
 
