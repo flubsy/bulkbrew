@@ -5,6 +5,7 @@ import "./globals.css";
 import { Nav } from "@/components/nav";
 import { SyncProvider } from "@/components/sync-provider";
 import { CurrencyProvider } from "@/components/currency-provider";
+import { SiteAnalytics } from "@/components/site-analytics";
 
 // Press Start 2P only for the hero wordmark. DotGothic16 for everything else: still a pixel face, but
 // unlike Pixelify Sans its S/5, Z/2, 0/O and 1/l/I are all distinct, so prices and counts read cleanly.
@@ -44,6 +45,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <main className="pb-tabbar mx-auto w-full max-w-6xl flex-1 px-4">{children}</main>
           </CurrencyProvider>
         </SyncProvider>
+        {/* Suspense: the analytics component reads the URL, which /d/<id> only knows at request time. */}
+        <Suspense fallback={null}>
+          <SiteAnalytics />
+        </Suspense>
         <footer className="hidden border-t-4 border-navy-600 py-6 text-center text-[15px] text-muted md:block">
           <a href="/faq" className="text-orange underline underline-offset-4">How BulkBrew works</a> · Card data and prices from Scryfall. BulkBrew is unofficial Fan Content permitted under the Fan Content Policy. Not approved or endorsed by Wizards.
         </footer>
