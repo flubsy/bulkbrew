@@ -7,7 +7,7 @@ import type { UpgradeOptions } from "@/lib/builder/upgrade";
 import { db } from "@/lib/db";
 import { packCollection, postJson } from "@/lib/payload";
 import { mapEdhrecTag } from "@/lib/tags";
-import { BRACKETS, type BuildOptions, type BuiltDeck, type EdhrecTag, type ReferenceDeck } from "@/lib/types";
+import { BRACKETS, THEMES, type ThemeId, type BuildOptions, type BuiltDeck, type EdhrecTag, type ReferenceDeck } from "@/lib/types";
 import { CardPreviewProvider } from "./card-preview";
 import { DeckView } from "./deck-view";
 import { Button, Disclosure, Input, Label, Notice, Panel, Select, TextArea } from "./ui";
@@ -45,6 +45,7 @@ function Inner() {
   const [commanderPick, setCommanderPick] = useState("");
   const [tags, setTags] = useState<EdhrecTag[]>([]);
   const [tag, setTag] = useState<string | undefined>();
+  const [themes, setThemes] = useState<ThemeId[]>([]);
 
   const [bracket, setBracket] = useState<BuildOptions["bracket"]>(3);
   const [maxSwaps, setMaxSwaps] = useState(10);
@@ -139,7 +140,7 @@ function Inner() {
       const build: BuildOptions = {
         format: "commander",
         bracket,
-        themes: mapped.themes,
+        themes: [...new Set([...mapped.themes, ...themes])],
         tribe: mapped.tribe,
         edhrecTag: tag,
         includeCards: [],
@@ -223,7 +224,34 @@ function Inner() {
           )}
         </Panel>
 
-        <Panel title="2 · How hard to upgrade">
+        <Panel title="2 · Theme (optional)">
+          {tags.length > 0 ? (
+            <>
+              <Label hint="from EDHREC decks for this commander">Build direction</Label>
+              <div className="flex flex-wrap gap-1">
+                {tags.slice(0, 10).map((t) => (
+                  <button key={t.slug} type="button" className="px-chip px-border" aria-pressed={tag === t.slug} onClick={() => setTag((x) => (x === t.slug ? undefined : t.slug))} title={`${t.decks.toLocaleString()} decks`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-[15px] text-muted">{commanders.length ? "No EDHREC build directions for this commander." : "Load a deck first: its commander's EDHREC build directions show here."}</p>
+          )}
+          <div className="mt-4">
+            <Label hint="lean swaps towards these">Theme / gimmick</Label>
+            <div className="flex flex-wrap gap-1">
+              {THEMES.filter((t) => t.id !== "tribal").map((t) => (
+                <button key={t.id} type="button" className="px-chip px-border" aria-pressed={themes.includes(t.id)} onClick={() => setThemes((x) => (x.includes(t.id) ? x.filter((y) => y !== t.id) : [...x, t.id]))}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="3 · How hard to upgrade">
           <Label>Target bracket</Label>
           <Select value={bracket} onChange={(e) => setBracket(Number(e.target.value) as BuildOptions["bracket"])}>
             {BRACKETS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
@@ -239,18 +267,6 @@ function Inner() {
               {GAIN_PRESETS.map((g) => <option key={g.v} value={g.v}>{g.label}</option>)}
             </Select>
           </div>
-          {tags.length > 0 && (
-            <div className="mt-4">
-              <Label hint="optional — lean the upgrade towards one EDHREC build">Build direction</Label>
-              <div className="flex flex-wrap gap-1">
-                {tags.slice(0, 10).map((t) => (
-                  <button key={t.slug} type="button" className="px-chip px-border" aria-pressed={tag === t.slug} onClick={() => setTag((x) => (x === t.slug ? undefined : t.slug))} title={`${t.decks.toLocaleString()} decks`}>
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </Panel>
 
         <Disclosure summary="Protect & exclude">

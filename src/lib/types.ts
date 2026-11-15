@@ -126,6 +126,22 @@ export const THEMES = [
   { id: "ramp", label: "Big mana / ramp" },
   { id: "wheels", label: "Wheels / discard" },
   { id: "burn", label: "Burn / damage" },
+  { id: "cascade", label: "Cascade / discover" },
+  { id: "storm", label: "Storm / spell chains" },
+  { id: "treasure", label: "Treasure" },
+  { id: "flying", label: "Flyers" },
+  { id: "flash", label: "Flash / instant speed" },
+  { id: "combat", label: "Extra combats" },
+  { id: "infect", label: "Infect / poison" },
+  { id: "superfriends", label: "Superfriends (planeswalkers)" },
+  { id: "vehicles", label: "Vehicles" },
+  { id: "theft", label: "Theft / steal" },
+  { id: "goad", label: "Goad / politics" },
+  { id: "clones", label: "Clones & copies" },
+  { id: "impulse", label: "Impulse draw (exile & cast)" },
+  { id: "sagas", label: "Sagas & lore" },
+  { id: "energy", label: "Energy" },
+  { id: "monarch", label: "Monarch / initiative" },
 ] as const;
 
 export type ThemeId = (typeof THEMES)[number]["id"];

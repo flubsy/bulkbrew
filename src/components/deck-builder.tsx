@@ -196,7 +196,24 @@ function DeckBuilderInner() {
           )}
         </Panel>
 
-        <Panel title="Theme / gimmick">
+        {isEdh && (
+          <>
+            <CommanderPicker cards={cards} opts={opts} setOpts={setOpts} knownTypes={knownTypes} />
+            {partnerable.length > 0 && (
+              <Panel title="Partner / background">
+                <Select value={opts.partner ?? ""} onChange={(e) => setOpts((o) => ({ ...o, partner: e.target.value || undefined }))} aria-label="Partner">
+                  <option value="">none</option>
+                  {partnerable.map((c) => (
+                    <option key={c.name} value={c.name}>{c.name} · {c.combo}</option>
+                  ))}
+                </Select>
+              </Panel>
+            )}
+          </>
+        )}
+
+        <Panel title={isEdh ? "Theme / gimmick (optional)" : "Theme / gimmick"}>
+          {isEdh && <p className="mb-3 text-[14px] text-muted">{opts.commander ? "Leans the build towards a plan. The commander's own EDHREC tags above do the same with real deck data." : "Picking themes first? The commander list above re-sorts to the best fits."}</p>}
           <div className="flex flex-wrap gap-1">
             {THEMES.map((t) => (
               <Chip key={t.id} pressed={opts.themes.includes(t.id)} onClick={() => toggle("themes", t.id)}>
@@ -216,22 +233,6 @@ function DeckBuilderInner() {
             </div>
           )}
         </Panel>
-
-        {isEdh && (
-          <>
-            <CommanderPicker cards={cards} opts={opts} setOpts={setOpts} knownTypes={knownTypes} />
-            {partnerable.length > 0 && (
-              <Panel title="Partner / background">
-                <Select value={opts.partner ?? ""} onChange={(e) => setOpts((o) => ({ ...o, partner: e.target.value || undefined }))} aria-label="Partner">
-                  <option value="">none</option>
-                  {partnerable.map((c) => (
-                    <option key={c.name} value={c.name}>{c.name} · {c.combo}</option>
-                  ))}
-                </Select>
-              </Panel>
-            )}
-          </>
-        )}
 
         <Panel title="Budget & price">
           <div className="grid grid-cols-2 gap-3">

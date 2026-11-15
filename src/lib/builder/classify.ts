@@ -76,6 +76,23 @@ export const THEME_PATTERNS: Record<ThemeId, { weight: number; type?: RegExp; or
   ramp: { weight: 4, oracle: /add \{|add .* mana|search your library for .* land|untap target land|double the mana|additional land/i },
   wheels: { weight: 5, oracle: /each player discards|discards? (their|your) hand|draw seven|draws? that many cards|whenever an opponent discards|whenever .* discards/i, keyword: /Madness|Hellbent/ },
   burn: { weight: 5, oracle: /deals? \d+ damage to (any target|each opponent|target player|target opponent)|deals? x damage|whenever .* deals damage|deals? damage to each opponent/i },
+  // Cascade decks want cascade/discover enablers and the spells worth hitting (the 4+ drops are scored by EDHREC, not here).
+  cascade: { weight: 6, oracle: /\bcascade\b|\bdiscover \d|exile cards from the top of your library until you exile a nonland card|cast it without paying its mana cost/i, keyword: /Cascade|Discover/ },
+  storm: { weight: 5, oracle: /\bstorm\b|copy (target|that|it|each) [^.]*(instant|sorcery|spell)|instant and sorcery spells you cast cost|spells you cast cost \{\d\} less|whenever you cast your (second|third)|add \{[RUB]\}\{[RUB]\}\{[RUB]\}|untap (target|up to)[^.]*lands?/i, keyword: /Storm|Replicate|Casualty/ },
+  treasure: { weight: 5, oracle: /\btreasures?\b/i },
+  flying: { weight: 3, oracle: /creatures (you control )?with flying|flying creatures you control|gains? flying|have flying/i, keyword: /^Flying$/ },
+  flash: { weight: 4, oracle: /\bflash\b|as though (it|they) had flash|during each opponent's turn|whenever you cast a spell during an opponent's turn/i, keyword: /^Flash$/ },
+  combat: { weight: 5, oracle: /additional combat phase|untap (all|each) (creatures|attacking)|extra combat/i },
+  infect: { weight: 6, oracle: /\binfect\b|\btoxic\b|poison counters?|\bproliferate\b/i, keyword: /Infect|Toxic|Poisonous|Proliferate/ },
+  superfriends: { weight: 5, type: /Planeswalker/, oracle: /planeswalkers? you control|loyalty (abilities|counters?)|\bproliferate\b/i, keyword: /Proliferate/ },
+  vehicles: { weight: 5, type: /Vehicle/, oracle: /\bcrew\b|vehicles? you control|becomes? an artifact creature/i, keyword: /Crew/ },
+  theft: { weight: 5, oracle: /gain control of|you may (cast|play) [^.]*(cards?|spells?) [^.]*(your opponents|an opponent|they) (own|exiled)|cast (it|that card|them) using any type of mana|spells? you don't own/i },
+  goad: { weight: 5, oracle: /\bgoad|attacks each combat if able|can't attack you|attack a player other than you|each opponent may/i, keyword: /Goad/ },
+  clones: { weight: 5, oracle: /enters? (the battlefield )?as a copy|create a token that'?s a copy|copy of (target|another|each)|becomes a copy/i },
+  impulse: { weight: 5, oracle: /exile the top [^.]* cards? of your library[^.]*\. (until|you may play|you may cast)|you may play (that card|those cards|them) (this turn|until)/i },
+  sagas: { weight: 5, type: /Saga/, oracle: /lore counters?|\bsagas?\b|read ahead/i },
+  energy: { weight: 6, oracle: /\{E\}|energy counters?/i },
+  monarch: { weight: 5, oracle: /\bmonarch\b|take the initiative|the initiative/i },
 };
 
 export function themeScore(c: CardData, themes: ThemeId[], tribe?: string): { score: number; reasons: string[] } {
@@ -102,6 +119,13 @@ export function themeScore(c: CardData, themes: ThemeId[], tribe?: string): { sc
     if (hit) { score += p.weight; reasons.push(t); }
   }
   return { score, reasons };
+}
+
+/** Does this card belong to a theme? (Collection filter; tribal needs a tribe, so it never matches here.) */
+export function matchesTheme(c: CardData, t: ThemeId): boolean {
+  if (t === "tribal") return false;
+  const p = THEME_PATTERNS[t];
+  return !!(p.type?.test(c.typeLine) || p.oracle?.test(c.oracleText) || (p.keyword && c.keywords.some((k) => p.keyword!.test(k))));
 }
 
 /** Creature types on a card's type line ("Legendary Creature — Elf Druid" → ["Elf","Druid"]). */

@@ -44,6 +44,22 @@ const THEME_WORDS: Partial<Record<ThemeId, RegExp>> = {
   ramp: /add \{|additional land|untap target land|mana of any|\{x\}/i,
   wheels: /discards?|draw seven|each player draws|whenever an opponent draws/i,
   burn: /deals? (\d+|x|that much) damage|whenever [^.]* deals damage|damage to each opponent|any target/i,
+  cascade: /\bcascade\b|\bdiscover\b|cast (it|that card|them) without paying (its|their) mana cost|exile cards from the top of your library until/i,
+  storm: /\bstorm\b|copy (that|target|it)[^.]*spell|whenever you cast your (second|third)|spells you cast cost/i,
+  treasure: /\btreasures?\b/i,
+  flying: /creatures? (you control )?with flying|flying creatures|gains? flying/i,
+  flash: /\bflash\b|during (each|an) opponent's turn/i,
+  combat: /additional combat|extra combat|untap all (creatures|attacking)/i,
+  infect: /\binfect\b|\btoxic\b|poison counters?/i,
+  superfriends: /planeswalkers? you control|loyalty (abilities|counters?)|planeswalker spell/i,
+  vehicles: /\bvehicles?\b|\bcrew/i,
+  theft: /gain control of|you don't own|cards? (your opponents own|an opponent owns)|cast [^.]* exiled with/i,
+  goad: /\bgoad|attacks each combat if able|attack a player other than you/i,
+  clones: /as a copy|token that'?s a copy|becomes a copy|copy of (target|another)/i,
+  impulse: /exile the top [^.]* cards? of your library|you may (play|cast) (that card|those cards|them|cards exiled)/i,
+  sagas: /\bsagas?\b|lore counters?/i,
+  energy: /\{E\}|energy counters?/i,
+  monarch: /\bmonarch\b|the initiative/i,
 };
 
 const LABEL = Object.fromEntries(THEMES.map((t) => [t.id, t.label])) as Record<string, string>;

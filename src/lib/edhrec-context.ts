@@ -7,6 +7,9 @@ const THEME_SLUG: Partial<Record<string, string>> = {
   artifacts: "artifacts", enchantments: "enchantments", counters: "counters", tokens: "tokens", spellslinger: "spellslinger",
   graveyard: "reanimator", aristocrats: "aristocrats", lifegain: "lifegain", voltron: "voltron", blink: "blink",
   landfall: "landfall", control: "control", aggro: "aggro", combo: "combo", mill: "mill", stax: "stax", wheels: "wheels", burn: "burn",
+  cascade: "cascade", storm: "storm", treasure: "treasure", flying: "flying", flash: "flash", combat: "extra-combats",
+  infect: "infect", superfriends: "superfriends", vehicles: "vehicles", theft: "theft", goad: "goad", clones: "clones",
+  impulse: "impulse-draw", sagas: "sagas", energy: "energy", monarch: "monarch",
 };
 
 /**
