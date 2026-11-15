@@ -36,6 +36,12 @@ const ROLE_LABEL: Record<Role, string> = {
   land: "Lands",
 };
 
+const TREND_TITLE = {
+  hot: "Printed in the last 18 months and already strong with this commander on EDHREC; its raw numbers under-rate it because it hasn't been out long.",
+  trending: "EDHREC players are adding this to decks much faster than usual right now.",
+  new: "A recent printing EDHREC lists for this commander. Not proven yet.",
+} as const;
+
 const ROLE_ORDER: Role[] = ["creature", "synergy", "ramp", "draw", "removal", "wipe", "counter", "tutor", "protection", "recursion", "finisher", "utility", "land"];
 
 export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck; onChange?: (d: BuiltDeck) => void; readOnly?: boolean }) {
@@ -193,7 +199,7 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
           <Group key={g.role} label={ROLE_LABEL[g.role]} cards={g.cards} action={editing ? "remove" : undefined} />
         ))}
         <p className="mt-2 text-[14px] text-muted">
-          Hover a card for the image; tap on mobile. <span className="inline-block h-2 w-2 bg-sea-light align-middle" /> = EDHREC pick, <span className="font-pixel text-[11px] text-gold">GC</span> = game changer.
+          Hover a card for the image; tap on mobile. <span className="inline-block h-2 w-2 bg-sea-light align-middle" /> = EDHREC pick, <span className="font-pixel text-[11px] text-gold">GC</span> = game changer, <span className="font-pixel text-[11px] text-orange">HOT</span> = new card already doing well with this commander, <span className="font-pixel text-[11px] text-sea-light">TREND</span> / <span className="font-pixel text-[11px] text-sea-light">NEW</span> = rising fast / recent printing on EDHREC.
           {!readOnly && <> Saved builds live under <a href="/saved" className="text-orange underline">Saved</a>; the .txt imports straight into Moxfield, Archidekt, MTGO and Arena.</>}
         </p>
       </Panel>
@@ -332,6 +338,7 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
           {(c.edhrec || c.inAverageDeck) && <span className="h-2 w-2 shrink-0 bg-sea-light" aria-label="EDHREC pick" />}
           <span className="truncate">{c.name}</span>
           {c.gameChanger && <span className="shrink-0 font-pixel text-[11px] text-gold">GC</span>}
+          {c.trend && <span className={`shrink-0 font-pixel text-[11px] ${c.trend === "hot" ? "text-orange" : "text-sea-light"}`} title={TREND_TITLE[c.trend]}>{c.trend === "hot" ? "HOT" : c.trend === "trending" ? "TREND" : "NEW"}</span>}
         </span>
         <span className="flex shrink-0 items-center gap-2">
           <ManaCost cost={c.manaCost} size={16} />

@@ -185,6 +185,7 @@ export interface DeckEntry {
   gameChanger?: boolean;
   edhrec?: { synergy?: number; inclusion?: number; label?: string; decks?: number };
   inAverageDeck?: boolean;
+  trend?: TrendFlag;
 }
 
 /** A card EDHREC recommends for the commander/theme. */
@@ -194,7 +195,14 @@ export interface EdhrecCard {
   inclusion?: number; // 0..1 (fraction of decks)
   decks?: number; // number of decks running it
   label?: string; // "high synergy cards", "top cards", "creatures", …
+  /** EDHREC's trend z-score: how much faster than usual the card is being added to decks lately. */
+  trend?: number;
+  /** In EDHREC's "New cards" list for this commander. */
+  isNew?: boolean;
 }
+
+/** Why a newer or rising card was flagged: hot = new and already strong here, trending = rising fast, new = recent printing EDHREC lists. */
+export type TrendFlag = "hot" | "trending" | "new";
 
 /** What EDHREC's average deck for a commander (+ tag) looks like: land count, type split and non-land mana curve. */
 export interface DeckProfile {

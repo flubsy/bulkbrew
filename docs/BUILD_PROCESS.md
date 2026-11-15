@@ -23,7 +23,8 @@
    - Overall popularity (Scryfall's EDHREC rank, log-scaled, 0–10).
    - Theme fit: rules-text patterns per theme, and tribal lord, member or payoff.
    - Commander hooks: what the commander's own text cares about.
-   - EDHREC for this commander/tag: `synergy × 6 + inclusion × 6 + 1.5`, weighted by list section. "High synergy" and "top cards" get ×1.25 +1.5, "high lift" ×1.1 +0.5, "new cards" ×0.6. A card in several lists keeps its strongest section.
+   - EDHREC for this commander/tag: `synergy × 6 + inclusion × 6 + 1.5`, weighted by list section. "High synergy" and "top cards" get ×1.25 +1.5, "high lift" ×1.1 +0.5, "new cards" ×0.6. A card in several lists keeps its strongest section. For cards newer than the commander, inclusion is scaled up for the time they've been out (up to ×2, or ×4 in a card's first year).
+   - **New and rising cards** (`trendFlag`): **hot** means printed in the last 18 months, with 30+ decks behind it, and already strong here (synergy ≥ 15%, time-adjusted inclusion ≥ 15%, or EDHREC trend score ≥ 2). It scores +2.5 and loses the "new cards" discount. **Trending** means an EDHREC trend score of 1 or more, and scores +1.5. **New** means a recent printing in EDHREC's "New cards" list; it's only a label. The deck list tags these HOT / TREND / NEW.
    - In EDHREC's average deck: +4.
    - Reference-deck frequency.
    - Role bonus and efficiency: cheap ramp and interaction score higher.
@@ -31,8 +32,22 @@
 4. **Fill.**
    - Must-includes go in first.
    - **Average-deck template.** If you own at least 40% of the non-basic cards in EDHREC's average deck, every owned non-land card from it goes in next, as long as it passes the bracket and budget rules. A note on the deck says so.
+   - **Mana creatures.** Green commander decks take their best cheap mana creatures first: 4 at bracket 3+, 3 below. They count towards the ramp quota. Ramp is one quota, and otherwise popular rocks crowd dorks out.
    - Then role quotas, e.g. Commander: 10 ramp, 10 draw, 8 removal, 2 wipes; these shift by theme. The land count comes from EDHREC's average deck for the commander and tag (`panels.piechart` / type counts), clamped to 30–42; it falls back to 36 plus theme tweaks.
    - Then the best remaining cards, under curve caps and soft role ceilings. With EDHREC's `panels.mana_curve`, each mana value from 3 up gets roughly its share of the average deck. Mana values 0–2 are uncapped, and any slot the caps leave empty goes to the next-best spell, not an extra land. Without EDHREC, fixed caps apply, and they relax for top-heavy themes like Dragons.
+   - **Dead-weight check** (`builder/needs.ts`). Some cards only work when the deck feeds them. Each one is checked against the finished list; a commander that supplies or rewards the thing counts as 4 cards. If the list can't support a card, it's cut and replaced, preferring the same role, and a note says why. Must-includes are never cut.
+
+     | Card type | Needs (excluding itself) |
+     |---|---|
+     | Skullclamp-style | 8+ creatures with 1 toughness, or token makers |
+     | Free sac outlets and death-trigger payoffs | 12+ token makers or creatures costing 2 or less |
+     | Instant/sorcery payoffs | 15+ instants and sorceries |
+     | Noncreature-spell payoffs | 20+ noncreature spells |
+     | Life-gain triggers | 8+ ways to gain life |
+     | Token payoffs | 8+ token makers |
+     | +1/+1 counter payoffs | 8+ cards that place counters |
+     | Artifact payoffs | 15+ artifacts or artifact-token makers |
+     | Enchantment payoffs | 12+ enchantments |
 5. **Mana base.** Nonbasic lands are scored for the colours you actually use. Basics are split by colour-pip share.
 6. **Check.**
    - Power rating (`builder/power.ts`): curve, ramp and fast mana, tutors, interaction, draw, game changers, staple density, finishers and synergy.
@@ -49,6 +64,7 @@
    - +2 if it fills one.
    - A small bonus for lowering the curve.
    - Lands only swap with lands. Bracket caps are respected.
+   - The dead-weight check applies here too. A card already in the list that its deck can't support scores 4 lower, so it goes early, and its swap says why. A bench card the deck couldn't support is never swapped in.
 5. Stop at the swap limit, or when nothing beats the current card by the minimum improvement.
 6. Write the reasons from the facts, for example "Played in 81% of Lathliss decks on EDHREC (429 decks)". Before and after, compare power, average mana value, roles and EDHREC match %.
 

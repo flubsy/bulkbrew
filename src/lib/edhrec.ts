@@ -57,13 +57,15 @@ const LIST_ORDER: Record<string, number> = { highsynergycards: 0, topcards: 1, g
 function flatten(page: CommanderJson | null): EdhrecCard[] {
   const out: EdhrecCard[] = [];
   const seen = new Set<string>();
+  // A card can sit in "New cards" and another list; it keeps the stronger label but stays marked new.
+  const fresh = new Set((page?.container?.json_dict?.cardlists ?? []).filter((l) => l.tag === "newcards").flatMap((l) => (l.cardviews ?? []).map((c) => c.name)));
   const lists = [...(page?.container?.json_dict?.cardlists ?? [])].sort((a, b) => (LIST_ORDER[a.tag ?? ""] ?? 5) - (LIST_ORDER[b.tag ?? ""] ?? 5));
   for (const list of lists) {
     for (const c of list.cardviews ?? []) {
       if (seen.has(c.name)) continue;
       seen.add(c.name);
       const inclusion = c.num_decks && c.potential_decks ? c.num_decks / c.potential_decks : c.inclusion;
-      out.push({ name: c.name, synergy: c.synergy, inclusion, decks: c.num_decks, label: list.header.toLowerCase() });
+      out.push({ name: c.name, synergy: c.synergy, inclusion, decks: c.num_decks, label: list.header.toLowerCase(), trend: c.trend_zscore, isNew: fresh.has(c.name) || undefined });
     }
   }
   return out;
