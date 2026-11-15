@@ -1,6 +1,7 @@
 import { isBasic } from "../scryfall";
 import { BRACKETS, type BuildOptions, type BuiltDeck, type CardData, type Color, type Combo, type DeckEntry, type Role, type Swap, type SwapReason } from "../types";
 import { computeStats, describe, formatMeta, makeScorer, quotas, sortDeck, toEntry, type Candidate, type EdhrecContext, type PoolCard } from "./heuristic";
+import { needsOf, unmetNeed } from "./needs";
 import { ratePower } from "./power";
 
 /**
@@ -84,6 +85,16 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
     if (why === "illegal" || why === "offColor") c.ineligible = why;
     return { c, qty: quantity, basic: isBasic(card.name), adj: landAdj(c) };
   });
+  // Cards in the list that need support it doesn't have (Skullclamp with nothing to clamp…) are
+  // the first to go: they score 4 lower for swap decisions and say why when swapped out.
+  const deadWhy = new Map<string, string>();
+  {
+    const cards = slots.map((s) => s.c.card);
+    for (const s of slots) {
+      const why = unmetNeed(s.c.card, cards, commanders);
+      if (why) { deadWhy.set(s.c.card.name, why); s.adj -= 4; }
+    }
+  }
   // ---- Downgrade: anything the target bracket doesn't allow must go, like an illegal card.
   // No toggle: picking a lower bracket than the deck is at IS the request to bring it down.
   const bracketWhy = new Map<string, string>();
@@ -162,8 +173,11 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
     if (!mustFix && voluntary >= upgrade.maxSwaps) break;
 
     let best: { inC: Candidate; out: Slot; gain: number; raw: number } | null = null;
+    const current = slots.filter((s) => s.qty > 0).map((s) => s.c.card);
     for (const inC of topBench) {
       if (used.has(inC.card.name)) continue;
+      // Never bring in a card the list can't support.
+      if (needsOf(inC.card).length && unmetNeed(inC.card, [...current, inC.card], commanders)) continue;
       const isGC = inC.flagged.includes("game changer");
       if (isGC && gcCount >= gcCap) continue;
       const inIsLand = inC.role === "land";
@@ -207,6 +221,8 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
     const { inC, out } = best;
     const whyIn = reasonsIn(inC, out.c, ed, cmdName, q, roleCount, gcCount, gcCap, bracket);
     const whyOut = reasonsOut(out.c, inC, ed, cmdName, q, roleCount, meta.label, bracketWhy.get(out.c.card.name));
+    const dead = deadWhy.get(out.c.card.name);
+    if (dead) whyOut.unshift({ kind: "synergy", text: `${dead.replace(out.c.card.name, "It")}.` });
     if (!out.c.ineligible) voluntary++;
     const outEntry = toEntry(out.c, 1, describe(out.c, ed));
     out.qty -= 1;

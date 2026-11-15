@@ -1,6 +1,7 @@
 import { BASIC_LANDS, isBasic, manaPips } from "../scryfall";
-import { FORMATS, THEMES, type BuildOptions, type BuiltDeck, type CardData, type Color, type DeckEntry, type DeckProfile, type EdhrecCard, type ReferenceDeck, type Role } from "../types";
+import { FORMATS, THEMES, type BuildOptions, type BuiltDeck, type CardData, type Color, type DeckEntry, type DeckProfile, type EdhrecCard, type ReferenceDeck, type Role, type TrendFlag } from "../types";
 import { commanderHooks, creatureTypes, isCreature, isExtraTurn, isFastMana, isGameChanger, isLand, isMassLandDenial, themeScore } from "./classify";
+import { unmetNeed } from "./needs";
 import { ratePower } from "./power";
 import { classifyCard } from "./roles";
 
@@ -34,6 +35,8 @@ export interface CardFacts {
   hooks: string[]; // commander mechanics this card plays into
   refFreq: number;
   staple: boolean;
+  /** New or rising card (see trendFlag). */
+  trend?: TrendFlag;
   roleSource: "tag" | "text";
 }
 
@@ -116,6 +119,23 @@ const SECTION_WEIGHT: Record<string, { mult: number; bonus: number; note?: strin
   "high lift cards": { mult: 1.1, bonus: 0.5 },
   "new cards": { mult: 0.6, bonus: 0 },
 };
+
+/**
+ * Flags for cards a commander's raw EDHREC numbers under-rate because they're new or rising:
+ *  - hot: printed in the last 18 months and already strong here (synergy ≥ 15%, time-adjusted
+ *    inclusion ≥ 15%, or trending hard), with at least a few dozen decks behind it;
+ *  - trending: EDHREC's trend score says decks are adding it much faster than usual;
+ *  - new: a recent printing EDHREC lists for this commander, not (yet) proven.
+ */
+export function trendFlag(er: EdhrecCard, ageDays: number, adjustedInclusion: number): TrendFlag | undefined {
+  const trend = er.trend ?? 0;
+  const recent = ageDays <= 540;
+  const enoughDecks = er.decks === undefined || er.decks >= 30;
+  if (recent && enoughDecks && ((er.synergy ?? 0) >= 0.15 || adjustedInclusion >= 0.15 || trend >= 2)) return "hot";
+  if (trend >= 1 && enoughDecks) return "trending";
+  if (recent && er.isNew) return "new";
+  return undefined;
+}
 
 /**
  * Build a scorer for one deck context. `eligibility(p)` says why a card can't be used (or null);
@@ -225,23 +245,31 @@ export function makeScorer(opts: BuildOptions, refs: ReferenceDeck[], commanders
     const er = edhrecByName.get(lname);
     if (er) {
       facts.edhrec = er;
-      const w = SECTION_WEIGHT[er.label ?? ""] ?? { mult: 1, bonus: 0 };
+      let w = SECTION_WEIGHT[er.label ?? ""] ?? { mult: 1, bonus: 0 };
       // EDHREC divides by every deck for this commander, including decks built before the card
-      // was printed. For cards newer than the commander, scale inclusion up (capped at ×2).
+      // was printed. For cards newer than the commander, scale inclusion up: up to ×2 normally,
+      // up to ×4 in a card's first year (a few months of decks is all it's had).
       let incl = er.inclusion ?? 0;
       const released = c.releasedAt ? Date.parse(c.releasedAt) : NaN;
+      const ageDays = Number.isFinite(released) ? (Date.now() - released) / 86400_000 : Infinity;
       if (incl && Number.isFinite(released) && Number.isFinite(cmdReleased) && released > cmdReleased) {
         const now = Date.now();
         const lifeCmd = Math.max(1, now - cmdReleased);
         const lifeCard = Math.max(30 * 86400_000, now - released);
-        const factor = Math.min(2, lifeCmd / lifeCard);
+        const factor = Math.min(ageDays < 365 ? 4 : 2, lifeCmd / lifeCard);
         if (factor > 1.15) {
           incl = Math.min(1, incl * factor);
           facts.adjustedInclusion = incl;
         }
       }
+      // Newer and rising cards (see trendFlag). A new card that's already strong here isn't hype:
+      // score it like any other list instead of the "new cards" discount.
+      facts.trend = trendFlag(er, ageDays, incl);
+      if (facts.trend === "hot" && w.mult < 1) w = { mult: 1, bonus: 0 };
       const s = ((er.synergy ?? 0) * 6 + incl * 6 + 1.5) * w.mult + w.bonus;
       score += s;
+      if (facts.trend === "hot") { score += 2.5; reasons.push("hot new card"); }
+      else if (facts.trend === "trending") { score += 1.5; reasons.push("trending"); }
       reasons.push(er.inclusion !== undefined ? `EDHREC ${Math.round(er.inclusion * 100)}%` : `EDHREC ${er.label ?? "pick"}`);
     }
     // Archetype-wide: how this card does in ALL decks of this tag + colours, whatever the commander.
@@ -326,6 +354,9 @@ export function describe(c: Candidate, ed: EdhrecContext = EMPTY_EDHREC): string
   const section = SECTION_WEIGHT[f.edhrec?.label ?? ""]?.note;
   if (f.edhrec?.inclusion !== undefined && ed.commanderName) bits.push(`in ${Math.round(f.edhrec.inclusion * 100)}% of ${ed.commanderName} decks${section ? ` (${section})` : ""}`);
   else if (f.edhrec) bits.push(section ? `EDHREC ${section}` : "EDHREC recommends it");
+  if (f.trend === "hot") bits.push("new card already doing well here");
+  else if (f.trend === "trending") bits.push("trending on EDHREC");
+  else if (f.trend === "new") bits.push("new card");
   if (f.adjustedInclusion !== undefined) bits.push(`newer card: ~${Math.round(f.adjustedInclusion * 100)}% of decks built since it came out`);
   if (f.inAverageDeck && !f.edhrec) bits.push("in EDHREC's average deck");
   if (f.archetype && (f.archetype.synergy ?? 0) >= 0.08 && ed.archetypeLabel) bits.push(`strong in ${ed.archetypeLabel} decks generally (+${Math.round((f.archetype.synergy ?? 0) * 100)}% synergy)`);
@@ -480,6 +511,24 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
     }
   }
 
+  // 1c. Mana creatures. Ramp is one quota, and rocks with huge play counts (Sol Ring, Signets)
+  // outscore dorks, so green decks ended up all rocks. Green commander decks get a few of their
+  // best cheap mana creatures first; they still count towards the ramp quota.
+  const byName = new Map(sorted.map((c) => [c.card.name, c] as const));
+  const isDork = (p: Candidate) => isCreature(p.card) && !/\bLand\b/.test(p.card.typeLine.split("//")[0]) && p.card.cmc <= 2 && (p.role === "ramp" || /\{T\}: Add/.test(p.card.oracleText));
+  if (meta.size === 100 && commanders.some((c) => c.colorIdentity.includes("G"))) {
+    const dorkWant = Math.min(q.ramp ?? 0, bracket >= 3 ? 4 : 3);
+    let dorks = picked.filter((e) => { const c = byName.get(e.name); return !!c && isDork(c); }).length;
+    const before = dorks;
+    for (const p of sorted) {
+      if (dorks >= dorkWant || count() >= nonLandTarget) break;
+      if (!isDork(p) || p.score < 0) continue;
+      if (take(p, 1, "mana creature")) dorks++;
+    }
+    if (dorks > before) notes.push(`Ramp: ${dorks} mana creature${dorks === 1 ? "" : "s"} (green decks want a few alongside rocks and land ramp).`);
+    else if (dorks < dorkWant) notes.push(`Ramp: only ${dorks} eligible mana creature${dorks === 1 ? "" : "s"} in your collection for this deck; ${dorkWant} is a good number for green.`);
+  }
+
   // 2. Fill role quotas (non-land) from best scored.
   const nonLandRoles = (Object.keys(q) as Role[]).filter((r) => r !== "land");
   for (const role of nonLandRoles) {
@@ -505,10 +554,12 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
     protection: (q.protection ?? 0) + 3,
   };
   // With EDHREC's land count, a hole left by the curve caps is filled by the next-best spell, not an extra land.
+  const fillRest = (accept: (p: Candidate) => boolean = () => true) => {
   for (const relaxCurve of profile ? [false, true] : [false]) {
     for (const p of sorted) {
       if (count() >= nonLandTarget) break;
       if (p.role === "land") continue;
+      if (pickedNames.has(p.card.name) || !accept(p)) continue;
       const ceil = roleCeil[p.role];
       if (ceil !== undefined && (roleCount[p.role] ?? 0) >= ceil && p.reasons[0] !== "must include") continue;
       const bucket = Math.min(6, Math.floor(p.card.cmc));
@@ -517,6 +568,41 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
       if (take(p, qty, p.reasons.slice(0, 2).join(", ") || "best available")) cmcCount[bucket] = (cmcCount[bucket] ?? 0) + qty;
     }
   }
+  };
+  fillRest();
+
+  // 3b. Dead weight: cards that need something the list doesn't have (Skullclamp with nothing to
+  // clamp, an altar with nothing to sacrifice, a spellslinger payoff in a creature deck). Cut them,
+  // refill the slot from the same role if possible, and repeat in case a cut removed support.
+  const deckCards = () => picked.map((e) => byName.get(e.name)?.card).filter((c): c is CardData => !!c);
+  const supported = (p: Candidate) => !unmetNeed(p.card, [...deckCards(), p.card], commanders);
+  const cuts: string[] = [];
+  for (let round = 0; round < 3; round++) {
+    const cards = deckCards();
+    const dead = picked
+      .map((e) => ({ e, c: byName.get(e.name) }))
+      .filter((x): x is { e: DeckEntry; c: Candidate } => !!x.c && x.c.reasons[0] !== "must include" && x.c.role !== "land")
+      .map((x) => ({ ...x, why: unmetNeed(x.c.card, cards, commanders) }))
+      .filter((x) => x.why);
+    if (!dead.length) break;
+    for (const { e, c, why } of dead) {
+      picked.splice(picked.indexOf(e), 1);
+      roleCount[c.role] = (roleCount[c.role] ?? 0) - e.quantity;
+      spend -= (c.priceUsd ?? 0) * e.quantity;
+      if (c.flagged.includes("game changer")) gcUsed--;
+      const bucket = Math.min(6, Math.floor(c.card.cmc));
+      cmcCount[bucket] = (cmcCount[bucket] ?? 0) - e.quantity; // pickedNames keeps it, so it isn't picked again
+      cuts.push(why!);
+      const same = sorted.find((p) => p.role === c.role && !pickedNames.has(p.card.name) && supported(p) && canAfford(p) && p.score > -50);
+      if (same && take(same, copiesFor(same), `${c.role} slot`)) {
+        const b = Math.min(6, Math.floor(same.card.cmc));
+        cmcCount[b] = (cmcCount[b] ?? 0) + copiesFor(same);
+      }
+    }
+    fillRest(supported);
+  }
+  if (cuts.length) notes.push(`Left out ${cuts.length} card${cuts.length === 1 ? "" : "s"} this list can't use well: ${cuts.join("; ")}.`);
+
   const nonLandsPicked = count();
   if (nonLandsPicked < nonLandTarget) warnings.push(`Only ${nonLandsPicked} eligible non-land cards found for ${nonLandTarget} slots — the collection is thin for this build. Loosen the filters or add cards.`);
 
@@ -665,6 +751,7 @@ export function toEntry(p: Candidate, qty: number, why: string): DeckEntry {
     gameChanger: p.flagged.includes("game changer") || undefined,
     edhrec: p.edhrec ? { synergy: p.edhrec.synergy, inclusion: p.edhrec.inclusion, label: p.edhrec.label, decks: p.edhrec.decks } : undefined,
     inAverageDeck: p.facts.inAverageDeck || undefined,
+    trend: p.facts.trend,
   };
 }
 
