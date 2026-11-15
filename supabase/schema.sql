@@ -189,3 +189,121 @@ revoke execute on function public.handle_new_user() from public, anon, authentic
 grant execute on function public.username_available(text) to anon, authenticated;
 grant execute on function public.login_email(text, text) to anon, authenticated;
 grant execute on function public.set_username(text) to authenticated;
+
+-- ---------------------------------------------------------------------------------------------
+-- Admin dashboard (/admin). Added Nov 2026; run this whole file again to add it.
+--
+-- Make yourself an admin once, in the SQL Editor (use the email you sign in with, Google included):
+--   insert into public.admins (user_id) select id from auth.users where email = 'you@example.com';
+--
+-- admin_stats() only returns totals and top-N lists, never emails, names, deck names or anyone's
+-- collection. A card, commander or wishlist entry is only listed once at least 2 different
+-- people have it, so no single person's deck can be picked out.
+-- ---------------------------------------------------------------------------------------------
+create table if not exists public.admins (
+  user_id  uuid        primary key references auth.users (id) on delete cascade,
+  added_at timestamptz not null default now()
+);
+alter table public.admins enable row level security;
+revoke all on public.admins from anon, authenticated;
+
+create or replace function public.is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.admins where user_id = auth.uid());
+$$;
+
+create or replace function public.admin_stats() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare
+  k constant int := 2; -- minimum distinct people before a name is shown
+begin
+  if not public.is_admin() then
+    raise exception 'Not allowed';
+  end if;
+
+  return (
+    with
+    b as (
+      select user_id, data,
+             to_timestamp(coalesce((data ->> 'createdAt')::bigint, extract(epoch from updated_at)::bigint * 1000) / 1000.0) as created
+      from public.user_data
+      where kind = 'builds' and not deleted and data is not null
+    ),
+    cmd as (
+      select b.user_id, c ->> 'name' as name from b, jsonb_array_elements(coalesce(b.data -> 'commanders', '[]'::jsonb)) c
+    ),
+    card as (
+      select b.user_id, e ->> 'name' as name
+      from b, jsonb_array_elements(coalesce(b.data -> 'cards', '[]'::jsonb)) e
+      where coalesce(e ->> 'role', '') <> 'land'
+    ),
+    owned as (
+      select user_id, data -> 'card' ->> 'name' as name, coalesce((data ->> 'quantity')::int, 1) as qty
+      from public.user_data
+      where kind = 'owned' and not deleted and data is not null
+    ),
+    wish as (
+      select user_id, id as name from public.user_data where kind = 'wishlist' and not deleted
+    ),
+    weeks as (
+      select generate_series(date_trunc('week', now()) - interval '11 weeks', date_trunc('week', now()), interval '1 week') as wk
+    )
+    select jsonb_build_object(
+      'generatedAt', now(),
+      'users', jsonb_build_object(
+        'total', (select count(*) from auth.users),
+        'new7', (select count(*) from auth.users where created_at > now() - interval '7 days'),
+        'new30', (select count(*) from auth.users where created_at > now() - interval '30 days'),
+        'active7', (select count(distinct user_id) from public.user_data where updated_at > now() - interval '7 days'),
+        'active30', (select count(distinct user_id) from public.user_data where updated_at > now() - interval '30 days'),
+        'withUsername', (select count(*) from public.profiles),
+        'byProvider', (select coalesce(jsonb_object_agg(p, n), '{}'::jsonb) from (
+          select coalesce(raw_app_meta_data ->> 'provider', 'email') as p, count(*) as n from auth.users group by 1) x)
+      ),
+      'decks', jsonb_build_object(
+        'total', (select count(*) from b),
+        'upgrades', (select count(*) from b where jsonb_typeof(b.data -> 'upgrade') = 'object'),
+        'markedBuilt', (select count(*) from b where (b.data ->> 'inUse') = 'true'),
+        'aiBuilt', (select count(*) from b where (b.data ->> 'engine') = 'ai'),
+        'avgPower', (select round(avg((b.data -> 'stats' -> 'power' ->> 'score')::numeric), 1) from b where b.data -> 'stats' -> 'power' ->> 'score' is not null),
+        'perWeek', (select coalesce(jsonb_agg(jsonb_build_object('week', w.wk, 'n', (select count(*) from b where date_trunc('week', b.created) = w.wk)) order by w.wk), '[]'::jsonb) from weeks w),
+        'byBracket', (select coalesce(jsonb_object_agg(br, n), '{}'::jsonb) from (
+          select b.data -> 'options' ->> 'bracket' as br, count(*) as n from b where b.data -> 'options' ->> 'bracket' is not null group by 1) x),
+        'byFormat', (select coalesce(jsonb_object_agg(f, n), '{}'::jsonb) from (
+          select coalesce(b.data -> 'options' ->> 'format', 'commander') as f, count(*) as n from b group by 1) x)
+      ),
+      'topCommanders', (select coalesce(jsonb_agg(x order by x.decks desc, x.name), '[]'::jsonb) from (
+        select name, count(*) as decks, count(distinct user_id) as people from cmd where name is not null
+        group by name having count(distinct user_id) >= k order by decks desc, name limit 10) x),
+      'topCards', (select coalesce(jsonb_agg(x order by x.decks desc, x.name), '[]'::jsonb) from (
+        select name, count(*) as decks, count(distinct user_id) as people from card
+        where name is not null and name not in ('Plains', 'Island', 'Swamp', 'Mountain', 'Forest', 'Wastes') and name not like 'Snow-Covered %'
+        group by name having count(distinct user_id) >= k order by decks desc, name limit 15) x),
+      'topThemes', (select coalesce(jsonb_agg(x order by x.decks desc), '[]'::jsonb) from (
+        select t as name, count(*) as decks, count(distinct b.user_id) as people
+        from b, jsonb_array_elements_text(coalesce(b.data -> 'options' -> 'themes', '[]'::jsonb)) t
+        group by t order by decks desc limit 10) x),
+      'collections', jsonb_build_object(
+        'people', (select count(distinct user_id) from owned),
+        'totalCards', (select coalesce(sum(qty), 0) from owned),
+        'medianUnique', (select percentile_cont(0.5) within group (order by n) from (select count(*) as n from owned group by user_id) x),
+        'mostOwned', (select coalesce(jsonb_agg(x order by x.people desc, x.name), '[]'::jsonb) from (
+          select name, count(distinct user_id) as people, sum(qty) as copies from owned
+          where name is not null and name not in ('Plains', 'Island', 'Swamp', 'Mountain', 'Forest', 'Wastes') and name not like 'Snow-Covered %'
+          group by name having count(distinct user_id) >= k order by people desc, copies desc, name limit 10) x)
+      ),
+      'topWishlist', (select coalesce(jsonb_agg(x order by x.people desc, x.name), '[]'::jsonb) from (
+        select name, count(distinct user_id) as people from wish group by name having count(distinct user_id) >= k order by people desc, name limit 10) x),
+      'shares', jsonb_build_object(
+        'total', (select count(*) from public.shared_decks),
+        'views', (select coalesce(sum(views), 0) from public.shared_decks),
+        'last30', (select count(*) from public.shared_decks where created_at > now() - interval '30 days')
+      )
+    )
+  );
+end $$;
+
+revoke execute on function public.is_admin() from public;
+revoke execute on function public.admin_stats() from public;
+grant execute on function public.is_admin() to authenticated;
+grant execute on function public.admin_stats() to authenticated;
