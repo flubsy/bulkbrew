@@ -83,6 +83,27 @@ A **Sign in** button appears in the header. Tell your friend to download a backu
 
 The **share** button on a deck makes a public link, `/d/<id>`. Links live in a `shared_decks` table that's only reachable through two database functions, so nobody can list other people's shares. To switch it on, run all of `supabase/schema.sql` again in the SQL Editor. It's safe to re-run. Sharing works whether or not the person is signed in. If they're signed in, sharing the same deck again updates the same link.
 
+### 6. Admin dashboard (`/admin`)
+
+This page shows site-wide usage:
+- Accounts and active users.
+- Decks saved per week.
+- Most-built commanders, most-played cards and themes.
+- Brackets, formats and collection sizes.
+- Most-owned and most-wished cards, and share-link views.
+
+It only shows totals and top lists: no emails, names, deck names or anyone's collection. A card or commander is only listed once 2+ different people have it, so no one's deck can be singled out.
+
+To set it up:
+1. Run `supabase/schema.sql` again. This adds the `admins` table and the `admin_stats()` function.
+2. In the SQL Editor, make your account an admin. Use the email you sign in with; a Google account is fine, no separate admin account needed:
+   ```sql
+   insert into public.admins (user_id) select id from auth.users where email = 'you@example.com';
+   ```
+3. Sign in. An **Admin dashboard** button appears on the Account page, or go straight to `/admin`.
+
+The page isn't linked anywhere else and is hidden from search engines. Everyone else, signed in or not, just sees "Nothing here", because the database function refuses anyone who isn't in `admins`.
+
 ## Renaming the project (Deckbit → BulkBrew)
 
 The code and GitHub repo are already called BulkBrew. The browser database is still called `deckbit` on purpose: renaming it would hide everyone's saved collection. To finish the rename:

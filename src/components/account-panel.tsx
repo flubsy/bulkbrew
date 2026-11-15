@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PROVIDER_LABEL, missingAccountEnv, supabase } from "@/lib/supabase";
 import { AccountSettings, AuthForms, NewPasswordForm } from "./auth-forms";
+import { AdminLink } from "./admin-dashboard";
 import { deleteCloudData, wipeLocal } from "@/lib/sync";
 import { useAccount } from "./sync-provider";
 import { Button, Notice, Panel } from "./ui";
@@ -89,7 +90,7 @@ export function AccountPanel() {
 
       {resetting && <NewPasswordForm onDone={() => { setResetting(false); window.history.replaceState(null, "", "/account"); }} />}
 
-      <Panel title="Account">
+      <Panel title="Account" aside={<AdminLink />}>
         <div className="flex items-center gap-4">
           {u.avatar ? (
             // eslint-disable-next-line @next/next/no-img-element
