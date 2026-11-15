@@ -6,6 +6,8 @@ import { clearSynced, db, exportBackup, importBackup, type Backup } from "@/lib/
 import { download } from "@/lib/export";
 import { groupOwned, isStaple, STAPLE_RANK } from "@/lib/collection";
 import { isCommanderCard } from "@/lib/builder/commanders";
+import { matchesTheme } from "@/lib/builder/classify";
+import { THEMES, type ThemeId } from "@/lib/types";
 import { CollectionTable } from "./collection-table";
 import { useCollectionImport } from "./use-collection-import";
 import { useCurrency } from "./currency-provider";
@@ -20,6 +22,7 @@ export function CollectionManager() {
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [colorFilter, setColorFilter] = useState("");
+  const [themeFilter, setThemeFilter] = useState<ThemeId | "">("");
   const [sort, setSort] = useState<"name" | "price" | "qty" | "cmc" | "popular">("name");
   const [only, setOnly] = useState<"" | "commanders" | "staples" | "unmatched">("");
   const { fmt } = useCurrency();
@@ -81,6 +84,8 @@ export function CollectionManager() {
 
   // Grouping and the commander check run once per collection change, not on every keystroke.
   const allGroups = useMemo(() => (owned ? groupOwned(owned).map((g) => ({ g, commander: !!g.card && isCommanderCard(g.card, "commander"), staple: isStaple(g.card) })) : []), [owned]);
+  // How many of your cards fit each theme (for the theme filter), counted once per collection change.
+  const themeCounts = useMemo(() => THEMES.filter((t) => t.id !== "tribal").map((t) => ({ id: t.id as ThemeId, label: t.label, n: allGroups.filter(({ g }) => g.card && matchesTheme(g.card, t.id)).length })), [allGroups]);
   const { groups, basics } = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const list = allGroups.filter(({ g, commander, staple }) => {
@@ -91,6 +96,7 @@ export function CollectionManager() {
         const ci = c?.colorIdentity ?? [];
         if (colorFilter === "C" ? ci.length !== 0 : !ci.includes(colorFilter as never)) return false;
       }
+      if (themeFilter && !(c && matchesTheme(c, themeFilter))) return false;
       if (only === "commanders" && !commander) return false;
       if (only === "staples" && !staple) return false;
       if (only === "unmatched" && g.rows.every((r) => r.card)) return false;
@@ -106,7 +112,7 @@ export function CollectionManager() {
     // Basic lands go behind one summary row unless the search is looking for them.
     const wantBasics = !!needle || typeFilter === "Basic";
     return { groups: wantBasics ? list : list.filter((g) => !g.basic), basics: wantBasics ? [] : list.filter((g) => g.basic) };
-  }, [allGroups, q, typeFilter, colorFilter, sort, only]);
+  }, [allGroups, q, typeFilter, colorFilter, themeFilter, sort, only]);
   const shownCount = groups.length + basics.length;
 
   return (
@@ -190,7 +196,7 @@ export function CollectionManager() {
               </Button>
             }
           >
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-5">
               <Input placeholder="Search name, text, type…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search collection" />
               <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Type">
                 <option value="">Any type</option>
@@ -207,6 +213,12 @@ export function CollectionManager() {
                 <option value="G">Green · tree</option>
                 <option value="C">Colourless</option>
               </Select>
+              <Select value={themeFilter} onChange={(e) => setThemeFilter(e.target.value as ThemeId | "")} aria-label="Theme">
+                <option value="">Any theme</option>
+                {themeCounts.map(({ id, label, n }) => (
+                  <option key={id} value={id} disabled={!n}>{label} ({n})</option>
+                ))}
+              </Select>
               <Select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Sort">
                 <option value="name">Sort: name</option>
                 <option value="price">Sort: price</option>
@@ -221,7 +233,7 @@ export function CollectionManager() {
               <Chip pressed={only === "staples"} onClick={() => setOnly(only === "staples" ? "" : "staples")} title={`Game changers and the ${STAPLE_RANK} most-played Commander cards on EDHREC`}>Staples</Chip>
               {stats.unmatched > 0 && <Chip pressed={only === "unmatched"} onClick={() => setOnly(only === "unmatched" ? "" : "unmatched")}>No Scryfall match</Chip>}
             </div>
-            <CollectionTable key={[q, typeFilter, colorFilter, sort, only].join("|")} groups={groups} basics={basics} />
+            <CollectionTable key={[q, typeFilter, colorFilter, themeFilter, sort, only].join("|")} groups={groups} basics={basics} />
           </Panel>
         </>
       )}

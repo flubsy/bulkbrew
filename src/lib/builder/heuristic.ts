@@ -384,6 +384,9 @@ export function quotas(format: BuildOptions["format"], themes: BuildOptions["the
     if (themes.includes("aggro") || themes.includes("voltron")) { q.land = 34; q.wipe = 0; q.protection = 5; }
     if (themes.includes("combo")) { q.tutor = 5; }
     if (themes.includes("spellslinger")) { q.counter = 3; q.draw = 12; }
+    if (themes.includes("storm")) { q.draw = 12; q.ramp = 12; q.tutor = Math.max(q.tutor ?? 0, 2); }
+    if (themes.includes("superfriends")) { q.protection = 4; q.wipe = 3; }
+    if (themes.includes("monarch") || themes.includes("goad")) { q.protection = Math.max(q.protection ?? 0, 3); }
     if (profile) q.land = Math.max(30, Math.min(42, Math.round(profile.lands)));
     return q;
   }
