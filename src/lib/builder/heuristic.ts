@@ -379,7 +379,7 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
     else warnings.push(`Commander "${name}" is not in your collection.`);
   }
   if (meta.singleton && meta.size === 100 && !commanders.length) {
-    warnings.push("No commander chosen — pick one from your legendary creatures for a proper build. Building a colour-unrestricted 99 for now.");
+    warnings.push("No commander chosen — pick a legendary creature, Vehicle or Spacecraft for a proper build. Building a colour-unrestricted 99 for now.");
   }
 
   const { candidates, report } = scorePool(pool, opts, refs, commanders, ed);

@@ -1,6 +1,7 @@
 import { readJson } from "@/lib/read-body";
 import { withImages } from "@/lib/scryfall";
 import { buildPool } from "@/lib/builder/heuristic";
+import { isCommanderCard } from "@/lib/builder/commanders";
 import { ratePower } from "@/lib/builder/power";
 import { buildPrimer } from "@/lib/builder/primer";
 import { comboSuggestions, upgradeDeck, type UpgradeOptions } from "@/lib/builder/upgrade";
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
   const cmdNames = body.commanders?.length ? body.commanders : body.deck.commanders;
   const commanders = cmdNames.map(get).filter((c): c is CardData => !!c);
   if (body.build.format === "commander" && !commanders.length) {
-    const legends = main.map((c) => get(c.name)).filter((c): c is CardData => !!c && (/Legendary Creature/.test(c.typeLine) || /can be your commander/i.test(c.oracleText)));
+    const legends = main.map((c) => get(c.name)).filter((c): c is CardData => !!c && isCommanderCard(c, body.build.format));
     return Response.json({ needCommander: [...new Set(legends.map((c) => c.name))] });
   }
 
