@@ -57,9 +57,25 @@ function quote(text: string, re: RegExp): string | undefined {
   return `${start > 0 ? "…" : ""}${text.slice(start, end).replace(/\s+/g, " ").trim()}${end < text.length ? "…" : ""}`;
 }
 
+/**
+ * Can this card lead a deck? Commander rule 903.3 since Edge of Eternities: a legendary creature,
+ * a legendary Vehicle, or a legendary Spacecraft with power/toughness (e.g. Hearthhull, the
+ * Worldseed), or any card that says it can be your commander. Brawl also allows legendary
+ * planeswalkers; Oathbreaker is led by a planeswalker. Only the front face counts.
+ * The type line is checked word by word, so "Legendary Artifact Creature" and
+ * "Legendary Enchantment Creature" count too.
+ */
 export function isCommanderCard(card: CardData, format: string): boolean {
   const front = card.typeLine.split("//")[0];
-  const ok = /Legendary Creature/.test(front) || /can be your commander/i.test(card.oracleText) || (format === "oathbreaker" && /Planeswalker/.test(front));
+  const [supertypes] = front.split(/\s+[—-]\s+/);
+  const legendary = /\bLegendary\b/.test(supertypes);
+  const ok =
+    /can be your commander/i.test(card.oracleText) ||
+    (legendary && /\bCreature\b/.test(supertypes)) ||
+    (legendary && /\bVehicle\b/.test(front)) ||
+    (legendary && /\bSpacecraft\b/.test(front) && card.power != null && card.toughness != null) ||
+    (format === "brawl" && legendary && /\bPlaneswalker\b/.test(supertypes)) ||
+    (format === "oathbreaker" && /\bPlaneswalker\b/.test(supertypes));
   if (!ok) return false;
   if (format === "commander" && card.legalities.commander !== "legal") return false;
   if (format === "brawl" && card.legalities.brawl !== "legal") return false;

@@ -217,7 +217,7 @@ export function CollectionManager() {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="px-label !mb-0 mr-1">Show only</span>
-              <Chip pressed={only === "commanders"} onClick={() => setOnly(only === "commanders" ? "" : "commanders")} title="Legendary creatures and cards that say they can be your commander">Can be your commander</Chip>
+              <Chip pressed={only === "commanders"} onClick={() => setOnly(only === "commanders" ? "" : "commanders")} title="Legendary creatures, Vehicles and Spacecraft, and cards that say they can be your commander">Can be your commander</Chip>
               <Chip pressed={only === "staples"} onClick={() => setOnly(only === "staples" ? "" : "staples")} title={`Game changers and the ${STAPLE_RANK} most-played Commander cards on EDHREC`}>Staples</Chip>
               {stats.unmatched > 0 && <Chip pressed={only === "unmatched"} onClick={() => setOnly(only === "unmatched" ? "" : "unmatched")}>No Scryfall match</Chip>}
             </div>

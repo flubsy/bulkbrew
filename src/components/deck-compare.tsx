@@ -32,7 +32,7 @@ async function explain(ref: ReferenceDeck, bracket: BuildOptions["bracket"], com
     explainOnly: true,
   });
   if (json.needCommander) {
-    if (!json.needCommander.length) throw new Error("This list doesn't mark a commander and has no legendary creature to use.");
+    if (!json.needCommander.length) throw new Error("This list doesn't mark a commander and has no card in it that can be a commander.");
     return explain(ref, bracket, [json.needCommander[0]]);
   }
   if (!json.deck) throw new Error(json.error ?? "Couldn't read that list");

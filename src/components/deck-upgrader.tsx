@@ -155,7 +155,7 @@ function Inner() {
       const json = await postJson<{ deck?: BuiltDeck; needCommander?: string[] }>("/api/upgrade", { deck, commanders, owned: explainOnly ? [] : packCollection(pool, "commander"), build, upgrade, explainOnly });
       if (json.needCommander) {
         setNeedCommander(json.needCommander);
-        setError(json.needCommander.length ? "This list doesn't mark a commander. Pick it below and run again." : "No legendary creature found in this list to use as commander.");
+        setError(json.needCommander.length ? "This list doesn't mark a commander. Pick it below and run again." : "Nothing in this list can be a commander (a legendary creature, Vehicle or Spacecraft).");
         return;
       }
       const d = json.deck as BuiltDeck;
