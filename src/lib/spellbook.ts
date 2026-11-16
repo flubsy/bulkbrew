@@ -40,7 +40,33 @@ function toCombo(c: ApiCombo, missing: string[] = []): Combo {
     missing,
     steps: c.description?.trim() || undefined,
     requires: [c.easyPrerequisites, c.notablePrerequisites].filter((x) => x && x.trim()).join(" ").trim() || undefined,
+    manaNeeded: c.manaValueNeeded,
   };
+}
+
+/**
+ * Ids of Commander Spellbook's featured combos (the site's is:featured search), cached for a day.
+ * Featured combos are ones Spellbook's editors highlight; the builder prefers them when it can
+ * complete one from your collection. Best-effort: on any failure the set is just empty.
+ */
+async function featuredIds(): Promise<Set<string>> {
+  const ids = await cached<string[]>("spellbook:featured", DAY, async () => {
+    try {
+      const out: string[] = [];
+      let url: string | null = "https://backend.commanderspellbook.com/variants/?q=is%3Afeatured&limit=100";
+      for (let page = 0; url && page < 5; page++) {
+        const res: Response = await fetch(url, { headers: { Accept: "application/json", "User-Agent": "BulkBrew/0.1 (collection deck builder)" } });
+        if (!res.ok) break;
+        const j = (await res.json()) as { results?: { id: string }[]; next?: string | null };
+        out.push(...(j.results ?? []).map((r) => r.id));
+        url = j.next ?? null;
+      }
+      return out.length ? out : null;
+    } catch {
+      return null;
+    }
+  });
+  return new Set(ids ?? []);
 }
 
 export async function findCombos(commanders: string[], cards: string[]): Promise<{ included: Combo[]; almost: Combo[] }> {
@@ -59,9 +85,13 @@ export async function findCombos(commanders: string[], cards: string[]): Promise
     }
   });
   const have = new Set([...commanders, ...cards].map((n) => n.toLowerCase()));
+  const featured = data ? await featuredIds() : new Set<string>();
+  const mark = (c: Combo) => (featured.has(c.id) ? { ...c, featured: true } : c);
+  // Most-played first (Spellbook's popularity = EDHREC decks running the combo), featured ahead of ties.
+  const order = (a: Combo, b: Combo) => (b.popularity ?? 0) - (a.popularity ?? 0) || Number(!!b.featured) - Number(!!a.featured);
   return {
-    included: (data?.results?.included ?? []).map((c) => toCombo(c)),
-    almost: (data?.results?.almostIncluded ?? []).map((c) => toCombo(c, c.uses.map((u) => u.card.name).filter((n) => !have.has(n.toLowerCase())))),
+    included: (data?.results?.included ?? []).map((c) => mark(toCombo(c))).sort(order),
+    almost: (data?.results?.almostIncluded ?? []).map((c) => mark(toCombo(c, c.uses.map((u) => u.card.name).filter((n) => !have.has(n.toLowerCase()))))).sort(order),
   };
 }
 

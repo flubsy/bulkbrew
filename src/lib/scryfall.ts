@@ -226,3 +226,15 @@ export async function fetchPrints(oracleId: string, maxPages = 3): Promise<CardD
   }
   return out;
 }
+
+/** Server-side: full card data for a list of names (75 per Scryfall call). Missing names are skipped. */
+export async function cardsByName(names: string[]): Promise<CardData[]> {
+  const unique = [...new Set(names.map((n) => n.split(" // ")[0]))];
+  const out: CardData[] = [];
+  for (let i = 0; i < unique.length; i += 75) {
+    try {
+      out.push(...(await fetchCollection(unique.slice(i, i + 75).map((name) => ({ name })))).data.map(normalizeCard));
+    } catch { /* partial data is fine */ }
+  }
+  return out;
+}

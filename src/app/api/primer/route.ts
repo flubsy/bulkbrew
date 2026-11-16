@@ -1,5 +1,5 @@
 import { buildPrimer } from "@/lib/builder/primer";
-import { fetchNamed, normalizeCard } from "@/lib/scryfall";
+import { cardsByName, fetchNamed, normalizeCard } from "@/lib/scryfall";
 import { findCombos } from "@/lib/spellbook";
 import type { BuiltDeck, CardData } from "@/lib/types";
 
@@ -22,6 +22,8 @@ export async function POST(req: Request) {
   const combos = deck.commanders.length
     ? (await findCombos(deck.commanders.map((c) => c.name), deck.cards.filter((c) => c.role !== "land").map((c) => c.name))).included.slice(0, 12)
     : deck.combos ?? [];
-  const primer = buildPrimer({ ...deck, combos }, commanders);
+  // Card text for the "how it wins" section (what kind of finisher each card is, enablers…).
+  const cardData = await cardsByName(deck.cards.filter((c) => c.role !== "land").map((c) => c.name));
+  const primer = buildPrimer({ ...deck, combos }, commanders, undefined, cardData);
   return Response.json({ primer, combos });
 }

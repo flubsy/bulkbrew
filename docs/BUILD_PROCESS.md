@@ -67,6 +67,27 @@
    - Commander Spellbook combo scan, with a bracket warning.
    - Alternatives you own, and an EDHREC wishlist of cards you don't.
 
+## Primer: how it wins (`builder/primer.ts`)
+
+Each way the deck can win gets its own entry, built from card text, the decklist and Commander Spellbook. It says how the route ends the game, the board to aim for, and what in the list sets it up.
+
+- **Combos** (up to 3, most-played first, Spellbook's featured picks ahead of ties):
+  - What the combo produces, and Spellbook's prerequisites as the board to aim for.
+  - Mana to assemble it, tutors to find the pieces, and protection or counterspells to keep it alive.
+  - If it doesn't win on its own: which payoff turns endless death or enter triggers into a kill, or what to spend infinite mana on (X spells, X abilities).
+  - Whether a finisher in the deck is also a combo piece.
+- **Finishers**, one entry per kind (overrun, drain, burn, alternate win, poison, extra combat, mill, draw-trigger damage, big threat):
+  - How that kind ends the game, and the board state to aim for, using the deck's own numbers (creatures, token makers, sacrifice outlets, draw engines, proliferate).
+  - Alternate-win cards quote their winning line.
+- **The commander:** commander damage for voltron decks, or the commander itself when it's a finisher.
+- **Big threats** as a fallback when nothing else qualifies.
+
+Key cards are just names with a short tag (ramp, card advantage, high synergy…).
+
+## Commander Spellbook
+
+The builder asks Spellbook for every combo the deck plus your 300 best bench cards can make (`find-my-combos`), not just ones on a list. Combos are ordered by popularity (EDHREC decks running them, per Spellbook), and the builder's combo pass weights it at 1.5 × log10(popularity). Spellbook's featured combos (`variants/?q=is:featured`, cached daily) get +2 and a "Featured" tag.
+
 ## Upgrade pipeline (`builder/upgrade.ts`)
 
 1. Resolve the imported list on Scryfall and score it with the **same scorer** as the builder.

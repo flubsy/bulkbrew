@@ -124,7 +124,7 @@ export async function POST(req: Request) {
   if (!ed.cards.length && build.useEdhrec) result.warnings.push("EDHREC had nothing for this commander (or was unreachable), so swaps are based on card quality and theme only.");
   result.stats.power = ratePower(result, { combos: result.combos });
   if (result.upgrade) result.upgrade.after.power = result.stats.power;
-  result.primer = buildPrimer(result, commanders, ed.tagLabel);
+  result.primer = buildPrimer(result, commanders, ed.tagLabel, [...new Set(resolved.found.values())]);
   if (body.explainOnly) {
     result.upgrade = undefined;
     result.alternatives = [];

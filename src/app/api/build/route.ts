@@ -65,7 +65,9 @@ export async function POST(req: Request) {
           const cost = c.cards.reduce((s, n) => s + (cmdNames.has(lower(n)) ? 0 : cmcOf.get(lower(n)) ?? 3), 0);
           const usesCommander = c.cards.some((n) => cmdNames.has(lower(n)));
           const sharesPiece = c.cards.some((n) => presentPieces.has(lower(n)) && !cmdNames.has(lower(n)));
-          const score = (usesCommander ? 4 : 0) + (sharesPiece ? 3 : 0) - need.length * 2 - Math.max(0, cost - 5) + Math.log10((c.popularity ?? 0) + 1);
+          // Popular lines (EDHREC decks running them, per Spellbook) and Spellbook's featured picks
+          // are proven and well documented, so they're preferred over obscure ones.
+          const score = (usesCommander ? 4 : 0) + (sharesPiece ? 3 : 0) - need.length * 2 - Math.max(0, cost - 5) + 1.5 * Math.log10((c.popularity ?? 0) + 1) + (c.featured ? 2 : 0);
           return { c, need, cost, score, usesCommander, sharesPiece };
         })
         // Bracket 3: three-card combos, or two-card ones that can't come together early (6+ mana of
@@ -119,6 +121,6 @@ export async function POST(req: Request) {
   }
 
   deck.stats.power = ratePower(deck, { combos: deck.combos });
-  deck.primer = buildPrimer(deck, cmdCards.filter((c): c is NonNullable<typeof c> => !!c), ed.tagLabel);
+  deck.primer = buildPrimer(deck, cmdCards.filter((c): c is NonNullable<typeof c> => !!c), ed.tagLabel, pool.map((p) => p.card));
   return Response.json({ deck: withImages(deck), aiAvailable: aiAvailable() });
 }

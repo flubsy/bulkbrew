@@ -248,6 +248,10 @@ export interface Combo {
   steps?: string;
   /** What must be true first (e.g. "Isochron Scepter on the battlefield"). */
   requires?: string;
+  /** On Commander Spellbook's featured list (is:featured). */
+  featured?: boolean;
+  /** Total mana Spellbook says you need to run the combo. */
+  manaNeeded?: number;
 }
 
 /** "How this deck works" — written from data, no AI. */
@@ -255,7 +259,11 @@ export interface Primer {
   summary: string;
   plan: string[];
   keyCards: { name: string; why: string }[];
-  winCons: { name: string; how: string }[];
+  /**
+   * Each way the deck wins: what it is, how it ends the game, the board to aim for before going
+   * for it, and what helps set it up (tutors, enablers, protection). Older saves only have name/how.
+   */
+  winCons: { name: string; how: string; kind?: "combo" | "finisher" | "commander" | "threats"; board?: string; setup?: string }[];
   mulligan: string[];
   phases: { label: string; cards: string[]; tip: string }[];
   watchOut: string[];
