@@ -5,7 +5,7 @@ import { buildHeuristic, buildPool, scorePool } from "@/lib/builder/heuristic";
 import { ratePower } from "@/lib/builder/power";
 import { buildPrimer } from "@/lib/builder/primer";
 import { edhrecContextFor } from "@/lib/edhrec-context";
-import { findCombos } from "@/lib/spellbook";
+import { applyBracketEstimate, findCombos } from "@/lib/spellbook";
 import type { BuildOptions, CardData, ReferenceDeck } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -120,6 +120,7 @@ export async function POST(req: Request) {
     if (bracket <= 2 && combos.included.length) deck.warnings.push(`This list contains ${combos.included.length} combo(s), which bracket ${bracket} doesn't allow. See the combos panel and cut a piece.`);
   }
 
+  await applyBracketEstimate(deck);
   deck.stats.power = ratePower(deck, { combos: deck.combos });
   deck.primer = buildPrimer(deck, cmdCards.filter((c): c is NonNullable<typeof c> => !!c), ed.tagLabel, pool.map((p) => p.card));
   return Response.json({ deck: withImages(deck), aiAvailable: aiAvailable() });

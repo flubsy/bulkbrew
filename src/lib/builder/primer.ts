@@ -2,6 +2,7 @@ import type { BuiltDeck, CardData, Combo, DeckEntry, Primer, ThemeId } from "../
 import { THEMES } from "../types";
 import { FINISHER_LABEL, finisherKind, type FinisherKind } from "./classify";
 import { detectThemes } from "./commanders";
+import { cardTags } from "./tags";
 
 /**
  * "How this deck works" — a primer written entirely from data:
@@ -217,7 +218,7 @@ export function buildPrimer(deck: Pick<BuiltDeck, "cards" | "commanders" | "stat
   const byKind = new Map<FinisherKind | "other", DeckEntry[]>();
   for (const f of finishers) {
     const card = data.get(f.name.toLowerCase());
-    const kind = card ? finisherKind(card) ?? "other" : "other";
+    const kind = card ? finisherKind(card, cardTags(card.name)) ?? "other" : "other";
     byKind.set(kind, [...(byKind.get(kind) ?? []), f]);
   }
   for (const [kind, group] of byKind) {
@@ -239,7 +240,7 @@ export function buildPrimer(deck: Pick<BuiltDeck, "cards" | "commanders" | "stat
   }
 
   // The commander as the win condition.
-  const cmdKind = cmdCard ? finisherKind(cmdCard) : null;
+  const cmdKind = cmdCard ? finisherKind(cmdCard, cardTags(cmdCard.name)) : null;
   if (deck.options.themes.includes("voltron")) {
     const gear = names(by((c) => /Equipment|Aura/.test(c.typeLine)), 3);
     winCons.unshift({ kind: "commander", name: cmd, how: "Commander damage: 21 combat damage from your commander knocks a player out, whatever their life total.", board: `Suit ${cmd} up${gear.length ? ` with ${list(gear)}` : ""} and give it evasion; it only needs three or four connected hits.`, setup: shields.length ? `Keep ${list(shields, "or")} ready: the deck stalls if ${cmd} dies.` : undefined });

@@ -140,8 +140,14 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
           <Mini label="Lands" value={`${deck.stats.lands}`} sub={`avg MV ${deck.stats.avgCmc.toFixed(2)}`} />
           <Mini label="Price" value={fmt(deck.stats.priceUsd, { whole: true })} sub="cheapest owned" />
           <Mini label="Power" value={power ? `${power.score}/10` : "—"} sub={power?.label} />
-          <Mini label="Bracket" value={deck.options.format === "commander" ? `~${deck.stats.estimatedBracket ?? "?"}` : "—"} sub={deck.options.bracket ? `target ${deck.options.bracket}` : undefined} />
+          <Mini label="Bracket" value={deck.options.format === "commander" ? `~${deck.stats.estimatedBracket ?? "?"}` : "—"} sub={[deck.options.bracket ? `target ${deck.options.bracket}` : "", deck.stats.bracketEstimate?.source === "spellbook" ? "via Spellbook" : ""].filter(Boolean).join(" · ") || undefined} />
         </div>
+        {deck.options.format === "commander" && deck.stats.bracketEstimate && (
+          <p className="mt-3 text-[15px] text-cream-dim">
+            <span className="text-muted">Bracket ~{deck.stats.estimatedBracket}{deck.stats.bracketEstimate.source === "spellbook" ? ` (Commander Spellbook${deck.stats.bracketEstimate.tag ? `: ${deck.stats.bracketEstimate.tag}` : ""})` : ""}:</span> {deck.stats.bracketEstimate.reasons.join("; ")}.
+            {deck.options.bracket && deck.stats.estimatedBracket && deck.stats.estimatedBracket > deck.options.bracket && <span className="text-gold"> Above your target of {deck.options.bracket}: Upgrade with a lower target bracket brings it down.</span>}
+          </p>
+        )}
         {power && <div className="mt-4"><PowerMeter power={power} /></div>}
         {!readOnly && (
           <div className="mt-4 flex items-end gap-2">

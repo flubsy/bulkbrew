@@ -7,7 +7,7 @@ import { buildPrimer } from "@/lib/builder/primer";
 import { comboSuggestions, upgradeDeck, type UpgradeOptions } from "@/lib/builder/upgrade";
 import { edhrecContextFor } from "@/lib/edhrec-context";
 import { backfillPrices, fetchCollection, fetchNamed, normalizeCard } from "@/lib/scryfall";
-import { findCombos } from "@/lib/spellbook";
+import { applyBracketEstimate, findCombos } from "@/lib/spellbook";
 import type { BuildOptions, CardData, ReferenceDeck } from "@/lib/types";
 
 export const maxDuration = 120;
@@ -122,6 +122,7 @@ export async function POST(req: Request) {
   }
 
   if (!ed.cards.length && build.useEdhrec) result.warnings.push("EDHREC had nothing for this commander (or was unreachable), so swaps are based on card quality and theme only.");
+  await applyBracketEstimate(result);
   result.stats.power = ratePower(result, { combos: result.combos });
   if (result.upgrade) result.upgrade.after.power = result.stats.power;
   result.primer = buildPrimer(result, commanders, ed.tagLabel, [...new Set(resolved.found.values())]);

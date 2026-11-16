@@ -67,6 +67,30 @@
    - Commander Spellbook combo scan, with a bracket warning.
    - Alternatives you own, and an EDHREC wishlist of cards you don't.
 
+## Scryfall Tagger tags (`src/data/roles.json`, `src/data/tags.json`)
+
+`npm run roles` (`scripts/build-roles.mjs`) downloads Scryfall Tagger's hand-curated function tags. Re-run it every month or two and commit the two JSON files.
+- **Roles:** ramp, removal, wipe, draw, tutor, counter, protection, recursion.
+- **Extra tags:** mana dork, mana rock, sacrifice outlet, death trigger, alternate win, win condition, token maker, treasure maker, anthem, mass pump, drain, burn, lifegain, extra combat, mill, self-mill, reanimate, flicker, cost reducer, ritual, copy spell, spells-matter, untapper, evasion, haste, +1/+1 counters, card advantage.
+
+For tags whose slug isn't confirmed, the script tries a few likely slugs in order and logs any it can't find.
+
+The tags are used in these places, always on top of the rules-text patterns (which remain the fallback):
+- **Roles:** win-condition tags become finishers, and dork or rock tags become ramp.
+- **Finisher kind:** an alternate win, mass pump or extra combat is read from tags first.
+- **Mana creatures:** the mana-dork tag.
+- **Theme fit:** a tagged card counts as on-theme. For example, sac outlets count for aristocrats, and rituals or cost reducers count for storm.
+- **Supply/payoff checks and the synergy pass:** sac outlets, token makers, lifegain, spells-matter, treasure makers and counter placers.
+
+## Bracket estimate
+
+When Commander Spellbook answers, the deck's bracket comes from its `/estimate-bracket` endpoint. That classifies every card (game changer, mass land denial, extra turn, banned) and every combo (two-card, lock, skip turns). We map that onto the 1–5 scale:
+- **Bracket 4:** more than 3 game changers, mass land denial, a lock-style combo, or the "Ruthless" tag.
+- **Bracket 3:** 1–3 game changers, or a two-card combo.
+- **Bracket 2:** otherwise.
+
+The deck shows the reasons. When Spellbook is unreachable, the estimate falls back to counting game changers.
+
 ## Primer: how it wins (`builder/primer.ts`)
 
 Each way the deck can win gets its own entry, built from card text, the decklist and Commander Spellbook. It says how the route ends the game, the board to aim for, and what in the list sets it up.

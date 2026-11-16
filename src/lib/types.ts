@@ -305,6 +305,8 @@ export interface BuiltDeck {
     priceUsd: number;
     gameChangers: string[];
     estimatedBracket?: Bracket;
+    /** Where the bracket estimate came from, and why (Commander Spellbook's estimator when reachable). */
+    bracketEstimate?: { source: "spellbook" | "bulkbrew"; tag?: string; reasons: string[] };
     power?: PowerRating;
   };
   notes: string[];

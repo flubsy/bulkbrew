@@ -170,7 +170,11 @@ export function commanderHooks(c: CardData): { pattern: RegExp; label: string }[
  */
 export type FinisherKind = "overrun" | "drain" | "burn" | "altwin" | "infect" | "combat" | "mill" | "drawdrain" | "threat";
 
-export function finisherKind(c: CardData): FinisherKind | null {
+export function finisherKind(c: CardData, tags?: ReadonlySet<string>): FinisherKind | null {
+  // Scryfall Tagger tags first (hand-curated), then rules-text patterns.
+  if (tags?.has("altWin")) return "altwin";
+  if (tags?.has("massPump")) return "overrun";
+  if (tags?.has("extraCombat")) return "combat";
   const o = c.oracleText;
   if (/you win the game|loses the game/i.test(o)) return "altwin";
   if (/creatures you control (gain trample and )?get \+(\d+|x)\/\+(\d+|x)[^.]*until end of turn|overrun|until end of turn, creatures you control get/i.test(o)) return "overrun";
