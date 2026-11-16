@@ -56,7 +56,7 @@ async function featuredIds(): Promise<Set<string>> {
       const out: string[] = [];
       let url: string | null = "https://backend.commanderspellbook.com/variants/?q=is%3Afeatured&limit=100";
       for (let page = 0; url && page < 5; page++) {
-        const res: Response = await fetch(url, { headers: { Accept: "application/json", "User-Agent": "Deckbit/0.1 (collection deck builder)" } });
+        const res: Response = await fetch(url, { headers: { Accept: "application/json", "User-Agent": "Deckbit/0.1 (collection deck builder)" }, signal: AbortSignal.timeout(8000) });
         if (!res.ok) break;
         const j = (await res.json()) as { results?: { id: string }[]; next?: string | null };
         out.push(...(j.results ?? []).map((r) => r.id));
@@ -78,6 +78,7 @@ export async function findCombos(commanders: string[], cards: string[]): Promise
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "Deckbit/0.1 (collection deck builder)" },
         body: JSON.stringify({ commanders: commanders.map((card) => ({ card })), main: cards.map((card) => ({ card })) }),
+        signal: AbortSignal.timeout(10_000), // a slow Spellbook never stalls the build
       });
       if (!res.ok) return null;
       return (await res.json()) as ApiResult;
@@ -137,6 +138,7 @@ export async function estimateBracket(commanders: string[], cards: { name: strin
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "Deckbit/0.1 (collection deck builder)" },
         body: JSON.stringify({ commanders: commanders.map((card) => ({ card, quantity: 1 })), main: cards.map((c) => ({ card: c.name, quantity: c.quantity })) }),
+        signal: AbortSignal.timeout(10_000), // a slow Spellbook never stalls the build
       });
       if (!res.ok) return null;
       return (await res.json()) as EstimateResult;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { db } from "@/lib/db";
 import { deckToCsv, deckToText, download } from "@/lib/export";
 import { BRACKETS, FORMATS, type BuiltDeck, type Color, type DeckEntry, type EdhrecCard, type Role } from "@/lib/types";
@@ -132,7 +132,9 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
   const setGroupBy = (g: "type" | "role") => { setGroupByState(g); try { localStorage.setItem(GROUP_KEY, g); } catch { /* ignore */ } };
   const typeGroups = TYPE_ORDER.map((t) => ({ key: t, label: TYPE_LABEL[t], cards: listCards.filter((c) => typeOf(c) === t).sort((a, b) => a.cmc - b.cmc || a.name.localeCompare(b.name)) })).filter((g) => g.cards.length);
   const shownGroups = groupBy === "type" ? typeGroups : groups.map((g) => ({ key: g.role, label: ROLE_LABEL[g.role], cards: g.cards }));
-  const own = useOwnership(deck, [...deck.commanders, ...listCards]);
+  // Memoised: a fresh array every render made the ownership check re-walk every saved deck on each hover.
+  const ownCards = useMemo(() => [...deck.commanders, ...listCards], [deck.commanders, listCards]);
+  const own = useOwnership(deck, ownCards);
   const roleCounts = Object.entries(deck.stats.roles).filter(([r]) => r !== "land").sort((a, b) => b[1] - a[1]) as [Role, number][];
 
   return (

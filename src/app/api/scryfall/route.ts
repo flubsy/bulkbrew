@@ -4,10 +4,11 @@ import type { CardData } from "@/lib/types";
 /**
  * POST { identifiers: Identifier[] }  →  { cards: Record<key, CardData>, notFound: Identifier[] }
  * The key for each card is the identifier that was sent, serialised, so the client can map back.
- * Max 75 identifiers per request (Scryfall limit). Called in chunks by the collection page.
+ * Max 75 identifiers per request (Scryfall limit). Called in chunks by the collection import.
+ * `prices: false` skips the unpriced-printing backfill (the import does it once at the end).
  */
 export async function POST(req: Request) {
-  let body: { identifiers?: Identifier[] };
+  let body: { identifiers?: Identifier[]; prices?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -29,16 +30,19 @@ export async function POST(req: Request) {
       if (c) cards[k] = normalizeCard(c);
     }
     // Fuzzy fallback for name-only misses (typos, "Jace, the Mind Sculptor" vs curly quotes etc).
+    // Two at a time: much quicker than one by one, and polite to Scryfall's 2 requests a second.
     const stillMissing: Identifier[] = [];
-    for (const ident of res.not_found) {
-      if ("name" in ident) {
-        const c = await fetchNamed(ident.name);
-        if (c) { cards[keyOf(ident)] = normalizeCard(c); continue; }
+    const queue = [...res.not_found];
+    const fuzzy = async () => {
+      for (let ident = queue.shift(); ident; ident = queue.shift()) {
+        const c = "name" in ident ? await fetchNamed(ident.name) : null;
+        if (c) cards[keyOf(ident)] = normalizeCard(c);
+        else stillMissing.push(ident);
       }
-      stillMissing.push(ident);
-    }
+    };
+    await Promise.all([fuzzy(), fuzzy()]);
     // Printings Scryfall has no price for (non-English, promos…): use the cheapest priced printing.
-    await backfillPrices(Object.values(cards), { maxQueries: 6 });
+    if (body.prices !== false) await backfillPrices(Object.values(cards), { maxQueries: 6 });
     return Response.json({ cards, notFound: stillMissing });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Scryfall request failed" }, { status: 502 });

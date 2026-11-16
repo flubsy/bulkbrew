@@ -153,15 +153,16 @@ export function keyOf(i: Identifier): string {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Server-side: resolve up to 75 identifiers in one Scryfall call. */
-export async function fetchCollection(identifiers: Identifier[]): Promise<{ data: ScryfallCard[]; not_found: Identifier[] }> {
+export async function fetchCollection(identifiers: Identifier[], tries = 5): Promise<{ data: ScryfallCard[]; not_found: Identifier[] }> {
   const res = await fetch("https://api.scryfall.com/cards/collection", {
     method: "POST",
     headers: { ...SCRYFALL_HEADERS, "Content-Type": "application/json" },
     body: JSON.stringify({ identifiers }),
+    signal: AbortSignal.timeout(15_000),
   });
-  if (res.status === 429) {
-    await sleep(1200);
-    return fetchCollection(identifiers);
+  if (res.status === 429 && tries > 1) {
+    await sleep(1200 * (6 - tries)); // back off a little more each time
+    return fetchCollection(identifiers, tries - 1);
   }
   if (!res.ok) throw new Error(`Scryfall ${res.status}: ${await res.text()}`);
   return res.json();
@@ -169,9 +170,17 @@ export async function fetchCollection(identifiers: Identifier[]): Promise<{ data
 
 /** Server-side: resolve a list of exact names (fuzzy per-card fallback for odd spellings). */
 export async function fetchNamed(name: string): Promise<ScryfallCard | null> {
-  const res = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`, { headers: SCRYFALL_HEADERS });
-  if (!res.ok) return null;
-  return res.json();
+  try {
+    let res = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`, { headers: SCRYFALL_HEADERS, signal: AbortSignal.timeout(8000) });
+    if (res.status === 429) {
+      await sleep(1200);
+      res = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(name)}`, { headers: SCRYFALL_HEADERS, signal: AbortSignal.timeout(8000) });
+    }
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null; // timeout / network: treat as not found
+  }
 }
 
 export function manaPips(manaCost: string): Record<Color, number> {

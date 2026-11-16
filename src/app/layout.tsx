@@ -6,6 +6,7 @@ import { Nav } from "@/components/nav";
 import { SyncProvider } from "@/components/sync-provider";
 import { CurrencyProvider } from "@/components/currency-provider";
 import { SiteAnalytics } from "@/components/site-analytics";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
 // Press Start 2P only for the hero wordmark. DotGothic16 for everything else: still a pixel face, but
 // unlike Pixelify Sans its S/5, Z/2, 0/O and 1/l/I are all distinct, so prices and counts read cleanly.
@@ -17,9 +18,15 @@ const atkinson = Atkinson_Hyperlegible({ weight: ["400", "700"], subsets: ["lati
 const FONT_SCRIPT = `try{var f=localStorage.getItem("deckbit.font");if(f)document.documentElement.dataset.font=f}catch(e){}`;
 
 export const metadata: Metadata = {
-  title: { default: "Deckbit", template: "%s · Deckbit" },
-  description: "Build the strongest Magic deck from the cards you already own. Import your collection, pick a commander, theme, bracket and budget, and let the engine (plus AI) do the rest.",
-  applicationName: "Deckbit",
+  metadataBase: new URL(SITE_URL),
+  title: { default: "Deckbit · Commander decks from the cards you own", template: "%s · Deckbit" },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: ["Commander deck builder", "EDH deck builder", "MTG collection", "Magic: The Gathering", "build deck from collection", "EDHREC", "Commander bracket"],
+  alternates: { canonical: "/" },
+  // The image comes from app/opengraph-image.png (Next adds it to every page that doesn't set its own).
+  openGraph: { type: "website", siteName: SITE_NAME, title: "Deckbit · Commander decks from the cards you own", description: SITE_DESCRIPTION, url: "/", locale: "en_US" },
+  twitter: { card: "summary_large_image", title: "Deckbit · Commander decks from the cards you own", description: SITE_DESCRIPTION },
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Deckbit", statusBarStyle: "black-translucent" },
 };

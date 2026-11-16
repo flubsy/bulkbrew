@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SavedTabs } from "@/components/nav";
 import { ReferenceDecks } from "@/components/reference-decks";
 
-export const metadata: Metadata = { title: "Reference decks" };
+export const metadata: Metadata = { title: "Reference decks", robots: { index: false, follow: false } };
 
 export default function DecksPage() {
   return (

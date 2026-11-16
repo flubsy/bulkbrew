@@ -4,15 +4,33 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useRef, useState } from "react";
 import { clearSynced, db, exportBackup, importBackup, type Backup } from "@/lib/db";
 import { download } from "@/lib/export";
-import { groupOwned, isStaple, STAPLE_RANK } from "@/lib/collection";
+import { isStaple, priceMissing, stableGroups, STAPLE_RANK, type CardGroup } from "@/lib/collection";
 import { isCommanderCard } from "@/lib/builder/commanders";
 import { matchesTheme } from "@/lib/builder/classify";
-import { THEMES, type ThemeId } from "@/lib/types";
+import { THEMES, type CardData, type ThemeId } from "@/lib/types";
 import { CollectionTable } from "./collection-table";
 import { useCollectionImport } from "./use-collection-import";
 import { useCurrency } from "./currency-provider";
 import { Button, Chip, Input, Label, Notice, Panel, Progress, Select, TextArea } from "./ui";
 
+const FILTER_THEMES = THEMES.filter((t) => t.id !== "tribal");
+
+/**
+ * Per-card flags for the filters (commander-eligible, staple, which themes it fits), worked out
+ * once per card and kept for the session: they only depend on the card's oracle data, so editing
+ * quantities never re-runs 35 theme regexes over the whole collection.
+ */
+type Flags = { commander: boolean; staple: boolean; themes: ThemeId[] };
+const flagCache = new Map<string, Flags>();
+function flagsOf(c: CardData | undefined, key: string): Flags {
+  if (!c) return { commander: false, staple: false, themes: [] };
+  let f = flagCache.get(key);
+  if (!f) {
+    f = { commander: isCommanderCard(c, "commander"), staple: isStaple(c), themes: FILTER_THEMES.filter((t) => matchesTheme(c, t.id)).map((t) => t.id) };
+    flagCache.set(key, f);
+  }
+  return f;
+}
 
 export function CollectionManager() {
   const [pasted, setPasted] = useState("");
@@ -46,20 +64,10 @@ export function CollectionManager() {
 
   /** Rows whose printing has no Scryfall price (often non-English cards): price them from the cheapest printing. */
   async function fixPrices() {
-    const rows = (await db.owned.toArray()).filter((c) => c.card && c.card.priceUsd == null && c.card.oracleId);
-    const ids = [...new Set(rows.map((r) => r.card!.oracleId))];
-    let fixed = 0;
-    setPriceFix(`Pricing ${ids.length} cards…`);
+    setPriceFix("Pricing…");
     try {
-      for (let i = 0; i < ids.length; i += 300) {
-        const res = await fetch("/api/prices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ oracleIds: ids.slice(i, i + 300) }) });
-        const { prices } = (await res.json()) as { prices?: Record<string, number> };
-        const updates = rows.filter((r) => prices?.[r.card!.oracleId] != null).map((r) => ({ ...r, card: { ...r.card!, priceUsd: prices![r.card!.oracleId] } }));
-        if (updates.length) await db.owned.bulkPut(updates);
-        fixed += updates.length;
-        setPriceFix(`Priced ${fixed} of ${rows.length}…`);
-      }
-      setPriceFix(fixed ? `Priced ${fixed} rows from their cheapest printing.${fixed < rows.length ? ` ${rows.length - fixed} have no price anywhere on Scryfall (digital-only, tokens, oversized…).` : ""}` : "Scryfall has no price for any printing of these cards.");
+      const { fixed, total } = await priceMissing((n, t) => setPriceFix(`Priced ${n} of ${t}…`));
+      setPriceFix(fixed ? `Priced ${fixed} rows from their cheapest printing.${fixed < total ? ` ${total - fixed} have no price anywhere on Scryfall (digital-only, tokens, oversized…).` : ""}` : "Scryfall has no price for any printing of these cards.");
     } catch {
       setPriceFix("Couldn't reach Scryfall. Try again in a minute.");
     }
@@ -71,24 +79,29 @@ export function CollectionManager() {
     setPhase({ kind: "idle" });
   }
 
+  // Grouping and the per-card flags run once per collection change, never on a keystroke; groups
+  // whose rows didn't change keep their object, so the table only re-renders the rows that did.
+  const allGroups = useMemo(() => (owned ? stableGroups(owned).map((g) => ({ g, ...flagsOf(g.card, g.key) })) : []), [owned]);
   const stats = useMemo(() => {
     if (!owned) return null;
-    const cards = owned.reduce((s, c) => s + c.quantity, 0);
-    const value = owned.reduce((s, c) => s + (c.card?.priceUsd ?? 0) * c.quantity, 0);
-    const unmatched = owned.filter((c) => !c.card).length;
-    const unpriced = owned.filter((c) => c.card && c.card.priceUsd == null && !/^Basic Land/.test(c.card.typeLine)).length;
-    const groups = groupOwned(owned);
-    const legendary = groups.filter((g) => g.card && isCommanderCard(g.card, "commander")).length;
-    return { cards, value, unmatched, unpriced, legendary, unique: groups.length };
-  }, [owned]);
-
-  // Grouping and the commander check run once per collection change, not on every keystroke.
-  const allGroups = useMemo(() => (owned ? groupOwned(owned).map((g) => ({ g, commander: !!g.card && isCommanderCard(g.card, "commander"), staple: isStaple(g.card) })) : []), [owned]);
-  // How many of your cards fit each theme (for the theme filter), counted once per collection change.
-  const themeCounts = useMemo(() => THEMES.filter((t) => t.id !== "tribal").map((t) => ({ id: t.id as ThemeId, label: t.label, n: allGroups.filter(({ g }) => g.card && matchesTheme(g.card, t.id)).length })), [allGroups]);
+    let cards = 0, value = 0, unmatched = 0, unpriced = 0;
+    for (const c of owned) {
+      cards += c.quantity;
+      value += (c.card?.priceUsd ?? 0) * c.quantity;
+      if (!c.card) unmatched++;
+      else if (c.card.priceUsd == null && !/^Basic Land/.test(c.card.typeLine)) unpriced++;
+    }
+    return { cards, value, unmatched, unpriced, legendary: allGroups.filter((x) => x.commander).length, unique: allGroups.length };
+  }, [owned, allGroups]);
+  // How many of your cards fit each theme (for the theme filter), from the cached flags.
+  const themeCounts = useMemo(() => {
+    const n = new Map<ThemeId, number>();
+    for (const x of allGroups) for (const t of x.themes) n.set(t, (n.get(t) ?? 0) + 1);
+    return FILTER_THEMES.map((t) => ({ id: t.id as ThemeId, label: t.label, n: n.get(t.id) ?? 0 }));
+  }, [allGroups]);
   const { groups, basics } = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const list = allGroups.filter(({ g, commander, staple }) => {
+    const list: CardGroup[] = allGroups.filter(({ g, commander, staple, themes }) => {
       const c = g.card;
       if (needle && !g.name.toLowerCase().includes(needle) && !(c?.oracleText ?? "").toLowerCase().includes(needle) && !(c?.typeLine ?? "").toLowerCase().includes(needle)) return false;
       if (typeFilter && !(c?.typeLine ?? "").includes(typeFilter)) return false;
@@ -96,7 +109,7 @@ export function CollectionManager() {
         const ci = c?.colorIdentity ?? [];
         if (colorFilter === "C" ? ci.length !== 0 : !ci.includes(colorFilter as never)) return false;
       }
-      if (themeFilter && !(c && matchesTheme(c, themeFilter))) return false;
+      if (themeFilter && !themes.includes(themeFilter)) return false;
       if (only === "commanders" && !commander) return false;
       if (only === "staples" && !staple) return false;
       if (only === "unmatched" && g.rows.every((r) => r.card)) return false;

@@ -16,9 +16,10 @@ import { Notice, Progress } from "./ui";
  */
 export function HomeHero() {
   const stats = useLiveQuery(async () => {
-    const rows = await db.owned.toArray();
-    const cards = rows.reduce((s, r) => s + (r.card ? r.quantity : 0), 0);
-    return { cards, unique: rows.filter((r) => r.card).length, decks: await db.builds.count() };
+    // Walk the rows instead of loading the whole collection into one array just for two numbers.
+    let cards = 0, unique = 0;
+    await db.owned.each((r) => { if (r.card) { cards += r.quantity; unique++; } });
+    return { cards, unique, decks: await db.builds.count() };
   }, []);
   const { phase, detected, importText, importFile } = useCollectionImport();
   const [dragging, setDragging] = useState(false);
