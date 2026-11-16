@@ -229,7 +229,7 @@ function Inner() {
         )}
         {!roll ? (
           <Panel title="Ready when you are">
-            <p className="text-[19px] text-cream-dim">Roll a random commander from your collection, along with the way most people build it on EDHREC. Or roll a theme first and let BulkBrew find a commander you own that fits. Then build it in one click.</p>
+            <p className="text-[19px] text-cream-dim">Roll a random commander from your collection, along with the way most people build it on EDHREC. Or roll a theme first and let Deckbit find a commander you own that fits. Then build it in one click.</p>
           </Panel>
         ) : (
           <Panel tone="orange" title="You rolled">

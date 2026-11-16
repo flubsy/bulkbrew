@@ -1,7 +1,7 @@
 import type { BuiltDeck, Combo, DeckEntry, PowerRating } from "../types";
 
 /**
- * BulkBrew power rating, 1–10, on the scale Commander players already use
+ * Deckbit power rating, 1–10, on the scale Commander players already use
  * (≈ EDHPowerLevel / community convention): precons 4–5, tuned casual 6–7, high power 8,
  * cEDH 9–10. It is NOT the same as a bracket: brackets are about which cards are allowed;
  * power is how fast and consistently the deck wins.

@@ -1,4 +1,4 @@
-# How BulkBrew builds and upgrades decks
+# How Deckbit builds and upgrades decks
 
 **Short version:** the engine is rules-based. Every build and upgrade runs on free public data (your collection, Scryfall, EDHREC, Commander Spellbook) plus the scoring and filling logic in `src/lib/builder/`. Claude is an optional extra pass that is **off by default**, and so far it has never run on this install (no API key is set). Friends can use the app without it costing anything.
 
@@ -151,7 +151,7 @@ Ordered by payoff:
 
 ## Where AI still helps (optional)
 
-The Claude pass (`builder/ai.ts`) only proposes swaps from your own bench, and every swap is validated. It's useful for nuance the numbers miss: anti-synergies, a combo line, an under-played gem. Turn it on per build. Set `BULKBREW_DISABLE_AI=1` to block it server-wide when sharing.
+The Claude pass (`builder/ai.ts`) only proposes swaps from your own bench, and every swap is validated. It's useful for nuance the numbers miss: anti-synergies, a combo line, an under-played gem. Turn it on per build. Set `DECKBIT_DISABLE_AI=1` to block it server-wide when sharing.
 
 ## Being a good API citizen
 

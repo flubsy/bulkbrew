@@ -2,7 +2,7 @@ import { DRAGON } from "./grids";
 import { bayer, hex, Screen, sprite, type RGB, type Sprite } from "./screen";
 
 /**
- * The BulkBrew courtyard: a night castle, one cauldron lit by its own fire, binder cards
+ * The Deckbit courtyard: a night castle, one cauldron lit by its own fire, binder cards
  * arcing in and a sleeved deck rising out. 200×120 art pixels, drawn at 10 fps as frame
  * tables (no easing). Static layers are baked once; each frame copies them and draws the
  * living parts: fire, brew, bubbles, sparks, cards, deck, stars, windows, a passing dragon.
@@ -123,7 +123,7 @@ function bakeBackground(): Screen {
     s.px(wx, wy, C.dark).px(wx + 3, wy, C.dark);
   }
 
-  // Banner hanging on the right of the wall: BulkBrew's orange, a gold cauldron mark.
+  // Banner hanging on the right of the wall: Deckbit's orange, a gold cauldron mark.
   s.rect(166, 37, 14, 1, C.gold);
   for (let y = 38; y < 64; y++) for (let x = 167; x < 179; x++) {
     if (y > 58 && Math.abs(x - 172.5) < (y - 58)) continue; // swallowtail

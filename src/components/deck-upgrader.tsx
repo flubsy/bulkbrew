@@ -197,7 +197,7 @@ function Inner() {
             {source === "saved" && (
               <Select value={savedId} onChange={(e) => setSavedId(e.target.value)} aria-label="Saved deck">
                 <option value="">Choose…</option>
-                {!!builds?.length && <optgroup label="Built in BulkBrew">{builds.map((b) => <option key={b.id} value={b.id}>{b.name ?? (b.commanders.map((c) => c.name).join(" / ") || "Deck")} · {new Date(b.createdAt).toLocaleDateString()}</option>)}</optgroup>}
+                {!!builds?.length && <optgroup label="Built in Deckbit">{builds.map((b) => <option key={b.id} value={b.id}>{b.name ?? (b.commanders.map((c) => c.name).join(" / ") || "Deck")} · {new Date(b.createdAt).toLocaleDateString()}</option>)}</optgroup>}
                 {!!refDecks?.length && <optgroup label="Reference decks">{refDecks.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>}
               </Select>
             )}

@@ -54,7 +54,7 @@ export function HomeHero() {
             <span className="text-orange">The best deck it can be.</span>
           </h1>
           <p className="mt-5 max-w-[46ch] text-[20px] text-cream-dim">
-            Pour in your collection. BulkBrew builds the strongest Commander deck those exact cards can make, and tells you why every card made it.
+            Pour in your collection. Deckbit builds the strongest Commander deck those exact cards can make, and tells you why every card made it.
           </p>
 
           {returning ? (

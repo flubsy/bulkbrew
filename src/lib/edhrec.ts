@@ -7,7 +7,7 @@ import { comboKey, type DeckProfile, type EdhrecCard, type EdhrecTag } from "./t
  * empty data and the builder carries on with its other signals.
  */
 
-const UA = "BulkBrew/0.1 (collection deck builder)";
+const UA = "Deckbit/0.1 (collection deck builder)";
 
 export function edhrecSlug(name: string): string {
   return name

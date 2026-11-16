@@ -4,7 +4,7 @@ import { ICON_CAULDRON, Sprite } from "@/components/sprites";
 
 export const metadata: Metadata = {
   title: "How it works",
-  description: "How BulkBrew scores cards, builds and upgrades decks, rates power level and uses EDHREC, Scryfall and Commander Spellbook data.",
+  description: "How Deckbit scores cards, builds and upgrades decks, rates power level and uses EDHREC, Scryfall and Commander Spellbook data.",
 };
 
 const TOC = [
@@ -46,11 +46,11 @@ export default function FaqPage() {
   return (
     <div className="py-8">
       <div className="flex items-end gap-4">
-        <h1 className="font-pixel text-[26px] text-cream">How BulkBrew works</h1>
+        <h1 className="font-pixel text-[26px] text-cream">How Deckbit works</h1>
         <Sprite grid={ICON_CAULDRON} scale={4} className="mb-1" />
       </div>
       <p className="mt-3 max-w-[68ch] text-[19px] text-cream-dim">
-        Everything BulkBrew decides comes from public data and fixed rules, not guesswork and not AI. Here&apos;s exactly how, so you can argue with it.
+        Everything Deckbit decides comes from public data and fixed rules, not guesswork and not AI. Here&apos;s exactly how, so you can argue with it.
       </p>
 
       <nav aria-label="On this page" className="mt-8 border-y-4 border-navy-600 py-4">
@@ -103,16 +103,16 @@ export default function FaqPage() {
           </ul>
           <h3 className="font-pixel mt-6 text-[16px] text-cream">Compared with EDHPowerLevel.com</h3>
           <p className="mt-2">
-            Same scale, different method. EDHPowerLevel rates the strength of the individual cards in a list. BulkBrew rates the deck&apos;s speed and consistency: curve, fast mana, tutors, cheap interaction, combos. So the two can disagree by a point. A deck of strong cards with no plan scores higher there; a lean, focused deck can score higher here. Both are conversation starters for your pod, not verdicts.
+            Same scale, different method. EDHPowerLevel rates the strength of the individual cards in a list. Deckbit rates the deck&apos;s speed and consistency: curve, fast mana, tutors, cheap interaction, combos. So the two can disagree by a point. A deck of strong cards with no plan scores higher there; a lean, focused deck can score higher here. Both are conversation starters for your pod, not verdicts.
           </p>
           <p className="mt-3 text-[16px] text-muted">
-            Earlier versions of BulkBrew rated generously, so a solid bracket 3 deck could show 9 or 10. Saved decks now show the corrected number.
+            Earlier versions of Deckbit rated generously, so a solid bracket 3 deck could show 9 or 10. Saved decks now show the corrected number.
           </p>
         </Section>
 
         <Section id="brackets" title="Brackets vs power">
           <p>
-            <b className="text-cream">Brackets</b> (1–5) are the official Commander rules for which cards are fair game: game changers, mass land denial, extra turns, early two-card combos. <b className="text-cream">Power</b> is how strong the deck plays. They usually move together, but a bracket 3 deck can be a 6 or an 8 depending on how tight it is. BulkBrew uses your bracket to decide what&apos;s <i>allowed</i>, and power to describe what you <i>got</i>.
+            <b className="text-cream">Brackets</b> (1–5) are the official Commander rules for which cards are fair game: game changers, mass land denial, extra turns, early two-card combos. <b className="text-cream">Power</b> is how strong the deck plays. They usually move together, but a bracket 3 deck can be a 6 or an 8 depending on how tight it is. Deckbit uses your bracket to decide what&apos;s <i>allowed</i>, and power to describe what you <i>got</i>.
           </p>
         </Section>
 

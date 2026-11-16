@@ -56,7 +56,7 @@ async function featuredIds(): Promise<Set<string>> {
       const out: string[] = [];
       let url: string | null = "https://backend.commanderspellbook.com/variants/?q=is%3Afeatured&limit=100";
       for (let page = 0; url && page < 5; page++) {
-        const res: Response = await fetch(url, { headers: { Accept: "application/json", "User-Agent": "BulkBrew/0.1 (collection deck builder)" } });
+        const res: Response = await fetch(url, { headers: { Accept: "application/json", "User-Agent": "Deckbit/0.1 (collection deck builder)" } });
         if (!res.ok) break;
         const j = (await res.json()) as { results?: { id: string }[]; next?: string | null };
         out.push(...(j.results ?? []).map((r) => r.id));
@@ -76,7 +76,7 @@ export async function findCombos(commanders: string[], cards: string[]): Promise
     try {
       const res = await fetch("https://backend.commanderspellbook.com/find-my-combos", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "BulkBrew/0.1 (collection deck builder)" },
+        headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "Deckbit/0.1 (collection deck builder)" },
         body: JSON.stringify({ commanders: commanders.map((card) => ({ card })), main: cards.map((card) => ({ card })) }),
       });
       if (!res.ok) return null;
@@ -135,7 +135,7 @@ export async function estimateBracket(commanders: string[], cards: { name: strin
     try {
       const res = await fetch("https://backend.commanderspellbook.com/estimate-bracket", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "BulkBrew/0.1 (collection deck builder)" },
+        headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "Deckbit/0.1 (collection deck builder)" },
         body: JSON.stringify({ commanders: commanders.map((card) => ({ card, quantity: 1 })), main: cards.map((c) => ({ card: c.name, quantity: c.quantity })) }),
       });
       if (!res.ok) return null;

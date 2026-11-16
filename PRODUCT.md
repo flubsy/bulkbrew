@@ -20,7 +20,7 @@ Turn a player's collection ("bulk") into the strongest deck it can make, then ke
 
 ## Positioning
 
-Every recommendation is limited to cards the user owns, and every pick and swap explains itself in plain language. Deck sites suggest cards you'd have to buy; BulkBrew works backwards from what's in the binder. The engine is rules-based, built on EDHREC, Scryfall and Commander Spellbook data, so it's free to run for anyone and doesn't depend on AI.
+Every recommendation is limited to cards the user owns, and every pick and swap explains itself in plain language. Deck sites suggest cards you'd have to buy; Deckbit works backwards from what's in the binder. The engine is rules-based, built on EDHREC, Scryfall and Commander Spellbook data, so it's free to run for anyone and doesn't depend on AI.
 
 ## Operating Context
 
@@ -42,11 +42,11 @@ Every recommendation is limited to cards the user owns, and every pick and swap 
 - **Card data:** Scryfall is the single source of truth; respect its rate limits and attribution. EDHREC and Commander Spellbook are best-effort and cached; the app must degrade gracefully without them.
 - **AI:** optional and off by default. A Claude pass can propose swaps from the user's own cards, but nothing requires it.
 - **Mobile:** bottom tab bar, no horizontal page scroll except data tables.
-- **Name rollout:** the app is renamed to BulkBrew on screen. Internal storage keys keep `deckbit` so existing data survives. The GitHub repo, Vercel project and domain are still named deckbit until the owner renames them.
+- **Name rollout:** the app is called Deckbit, matching the Vercel project and domain (deckbit.vercel.app). Internal storage keys have always been `deckbit`. The GitHub repo is still called bulkbrew.
 
 ## Brand Commitments
 
-- **Name: BulkBrew** (chosen 2026-11-11, replacing the working name Deckbit). "Brew" is what players call deckbuilding; "bulk" is the cards they already own.
+- **Name: Deckbit.** Briefly renamed BulkBrew (2026-11-11), then changed back on 2026-11-16 because another open-source project already uses that name.
 - **Identity:** pixel / 8-bit fantasy-Magic look, with castles, dragons, leviathans and wizards; RuneScape-esque rather than generic retro. Dark navy and charcoal with orange highlights. The owner likes motion such as bobbing sprites and a flying dragon, but not boats.
 - **Voice:** arcade-cabinet confidence. Short, direct copy, no marketing fluff, numbers where they help.
 
