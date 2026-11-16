@@ -59,7 +59,7 @@ export function PrimerView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d:
   if (!p) {
     return (
       <Disclosure summary="How this deck works">
-        <p className="text-[17px] text-cream-dim">This deck was saved before primers existed. BulkBrew can write one from the list, EDHREC and Commander Spellbook data. No AI involved.</p>
+        <p className="text-[17px] text-cream-dim">This deck was saved before primers existed. Deckbit can write one from the list, EDHREC and Commander Spellbook data. No AI involved.</p>
         <div className="mt-3"><Button size="sm" onClick={generate} disabled={busy}>{busy ? "Writing…" : "Write a primer"}</Button></div>
         {err && <div className="mt-3"><Notice tone="error">{err}</Notice></div>}
       </Disclosure>
@@ -147,7 +147,7 @@ export function PrimerView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d:
           <ul className="grid gap-1 text-gold">{p.watchOut.map((w, i) => <li key={i}>{w}</li>)}</ul>
         </Section>
       )}
-      <p className="mt-4 text-[14px] text-muted">Written by BulkBrew from the decklist, EDHREC and Commander Spellbook. No AI involved.</p>
+      <p className="mt-4 text-[14px] text-muted">Written by Deckbit from the decklist, EDHREC and Commander Spellbook. No AI involved.</p>
     </Disclosure>
   );
 }

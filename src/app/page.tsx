@@ -10,7 +10,7 @@ const PATH = [
 
 const MORE = [
   { href: "/roll", icon: ICON_DIE, title: "Roll a commander", body: "Can't choose? Roll a commander from your collection and the way most people build it, then brew it in one click." },
-  { href: "/upgrade", icon: ICON_ANVIL, title: "Upgrade a deck you play", body: "Bring a Moxfield or Archidekt list. BulkBrew finds the best swaps sitting in your bulk and explains each one." },
+  { href: "/upgrade", icon: ICON_ANVIL, title: "Upgrade a deck you play", body: "Bring a Moxfield or Archidekt list. Deckbit finds the best swaps sitting in your bulk and explains each one." },
   { href: "/upgrade", icon: TOME, title: "Explain how a deck works", body: "A primer for any list: the game plan, key cards, combo lines, mulligans and its weak spots." },
   { href: "/account", icon: ICON_CHEST, title: "Take it everywhere", body: "Sign in and your collection and decks follow you to your phone and your friend's laptop." },
 ];
@@ -46,7 +46,7 @@ export default function Home() {
           <div>
             <h2 id="own" className="font-pixel text-[22px] text-cream">Only what&apos;s in your binder</h2>
             <p className="mt-4 max-w-[60ch] text-[19px] text-cream-dim">
-              BulkBrew never slips in a card you&apos;d have to buy. Cards EDHREC suggests that you don&apos;t own go to a wishlist instead. Every pick and every swap comes with its reason, worked out from EDHREC play rates, Scryfall card roles and Commander Spellbook combos. No AI is required.
+              Deckbit never slips in a card you&apos;d have to buy. Cards EDHREC suggests that you don&apos;t own go to a wishlist instead. Every pick and every swap comes with its reason, worked out from EDHREC play rates, Scryfall card roles and Commander Spellbook combos. No AI is required.
             </p>
             <Link href="/faq" className="mt-5 inline-block text-[17px] text-orange underline underline-offset-4">How scores and power levels are calculated</Link>
           </div>

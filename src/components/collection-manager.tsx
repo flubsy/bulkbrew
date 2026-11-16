@@ -30,7 +30,7 @@ export function CollectionManager() {
 
   async function backup() {
     const b = await exportBackup();
-    download(`bulkbrew-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(b), "application/json");
+    download(`deckbit-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(b), "application/json");
   }
 
   async function restore(file: File) {

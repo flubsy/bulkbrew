@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "BulkBrew",
-    short_name: "BulkBrew",
+    name: "Deckbit",
+    short_name: "Deckbit",
     description: "Build and upgrade Magic decks from the cards you own.",
     start_url: "/",
     scope: "/",

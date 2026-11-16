@@ -2,6 +2,7 @@ import { isBasic } from "../scryfall";
 import { BRACKETS, type BuildOptions, type BuiltDeck, type CardData, type Color, type Combo, type DeckEntry, type Role, type Swap, type SwapReason } from "../types";
 import { computeStats, describe, formatMeta, makeScorer, quotas, sortDeck, toEntry, type Candidate, type EdhrecContext, type PoolCard } from "./heuristic";
 import { needsOf, unmetNeed } from "./needs";
+import { similarFit } from "./similar";
 import { ratePower } from "./power";
 
 /**
@@ -85,6 +86,11 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
     if (why === "illegal" || why === "offColor") c.ineligible = why;
     return { c, qty: quantity, basic: isBasic(card.name), adj: landAdj(c) };
   });
+  // Decks like yours: real lists for this commander, weighted by overlap with this one. A card the
+  // closest decks run more than average scores higher on both sides of a swap.
+  const sim = ed.sampleDecks?.length ? similarFit(ed.sampleDecks, slots.filter((s) => s.c.role !== "land").map((s) => s.c.card.name)) : null;
+  if (sim) for (const s of slots) if (s.c.role !== "land") s.adj += sim.fit(s.c.card.name);
+
   // Cards in the list that need support it doesn't have (Skullclamp with nothing to clamp…) are
   // the first to go: they score 4 lower for swap decisions and say why when swapped out.
   const deadWhy = new Map<string, string>();
@@ -182,7 +188,7 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
       if (isGC && gcCount >= gcCap) continue;
       const inIsLand = inC.role === "land";
       if (inIsLand && (!upgrade.allowLandSwaps || landSwaps >= landSwapCap)) continue;
-      const inAdj = landAdj(inC);
+      const inAdj = landAdj(inC) + (sim && inC.role !== "land" ? sim.fit(inC.card.name) : 0);
       for (const out of slots) {
         if (out.qty <= 0) continue;
         if (protect.has(out.c.card.name.toLowerCase())) continue;
@@ -220,6 +226,7 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
     // Apply.
     const { inC, out } = best;
     const whyIn = reasonsIn(inC, out.c, ed, cmdName, q, roleCount, gcCount, gcCap, bracket);
+    if (sim && sim.share(inC.card.name) >= 0.3) whyIn.push({ kind: "edhrec", text: `In ${Math.round(sim.share(inC.card.name) * 100)}% of the real ${cmdName} decks most like yours.` });
     const whyOut = reasonsOut(out.c, inC, ed, cmdName, q, roleCount, meta.label, bracketWhy.get(out.c.card.name));
     const dead = deadWhy.get(out.c.card.name);
     if (dead) whyOut.unshift({ kind: "synergy", text: `${dead.replace(out.c.card.name, "It")}.` });
@@ -245,6 +252,7 @@ export function upgradeDeck(input: UpgradeInput): BuiltDeck {
     `Compared your ${slots.length - swaps.length} unique cards against ${bench.length} eligible cards from your collection.`,
     `EDHREC match (non-land cards that EDHREC lists for ${cmdName}): ${before.edhrecMatch}% → ${after.edhrecMatch}%.`,
   ];
+  if (sim) notes.push(`Decks like yours: compared with ${sim.samples} real ${cmdName} decklists; the closest share about ${Math.round(sim.topOverlap * 100)}% of this list, and cards they run more than average count for more.`);
   if (downgradeCuts) notes.unshift(`Brought the list down to ${label}: ${downgradeCuts} card${downgradeCuts === 1 ? "" : "s"} it doesn't allow ${downgradeCuts === 1 ? "was" : "were"} swapped out first (these don't count towards your swap limit).`);
   if (voluntary < upgrade.maxSwaps && !ineligibleLeft()) notes.push(`Stopped at ${voluntary} upgrade swaps: no remaining card in your collection beats a card in the list by at least ${upgrade.minGain} points.`);
   const warnings: string[] = [];

@@ -1,4 +1,4 @@
-# How BulkBrew builds and upgrades decks
+# How Deckbit builds and upgrades decks
 
 **Short version:** the engine is rules-based. Every build and upgrade runs on free public data (your collection, Scryfall, EDHREC, Commander Spellbook) plus the scoring and filling logic in `src/lib/builder/`. Claude is an optional extra pass that is **off by default**, and so far it has never run on this install (no API key is set). Friends can use the app without it costing anything.
 
@@ -91,6 +91,18 @@ When Commander Spellbook answers, the deck's bracket comes from its `/estimate-b
 
 The deck shows the reasons. When Spellbook is unreachable, the estimate falls back to counting game changers.
 
+## Decks like yours (`builder/similar.ts`, `lib/similar-decks.ts`)
+
+EDHREC's numbers say how often *the commander's* decks run a card. This step asks a second question: how often do the real decks that **look most like this list** run it?
+
+- **Samples:** up to 40 real decklists for the commander, cached for a week. They come from EDHREC's recent decks for the commander first, then Archidekt's public deck search. Basics, the commander and maybeboard cards are removed. Fetching runs 6 at a time and gives up after 20 seconds; any failure just means fewer samples.
+- **Weighting:** each sample is weighted by how much of our non-land list it also runs, squared, so close matches count far more than loose ones.
+- **Fit:** fit = weighted share × 4 + (weighted − plain share) × 8, capped at 6. A card every deck runs gets little extra; a card the closest decks run much more than average gets a lot.
+- **Builder:** after the synergy pass, up to 8 swaps where a bench card's score plus fit beats the weakest card in its slot by 2 or more. The swap rules are the same as the synergy pass, and the weights are recomputed after each swap. The note lists the swaps and how many samples came from each source.
+- **Upgrade:** fit is added to both sides of every swap, and swaps it backs say "In N% of the real decks most like yours".
+- **Fewer than 8 samples:** the step is skipped and a note says so.
+- **Unverified endpoints:** the EDHREC deck-list and deck-preview paths and the Archidekt search parameters couldn't be checked from the build sandbox. If a source never returns decks, check the URLs in `lib/similar-decks.ts`.
+
 ## Primer: how it wins (`builder/primer.ts`)
 
 Each way the deck can win gets its own entry, built from card text, the decklist and Commander Spellbook. It says how the route ends the game, the board to aim for, and what in the list sets it up.
@@ -151,7 +163,7 @@ Ordered by payoff:
 
 ## Where AI still helps (optional)
 
-The Claude pass (`builder/ai.ts`) only proposes swaps from your own bench, and every swap is validated. It's useful for nuance the numbers miss: anti-synergies, a combo line, an under-played gem. Turn it on per build. Set `BULKBREW_DISABLE_AI=1` to block it server-wide when sharing.
+The Claude pass (`builder/ai.ts`) only proposes swaps from your own bench, and every swap is validated. It's useful for nuance the numbers miss: anti-synergies, a combo line, an under-played gem. Turn it on per build. Set `DECKBIT_DISABLE_AI=1` to block it server-wide when sharing.
 
 ## Being a good API citizen
 

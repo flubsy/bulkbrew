@@ -358,7 +358,7 @@ export interface UpgradeSummary {
   unresolved: string[];
 }
 
-/** BulkBrew's own 1–10 power rating with the factors behind it. */
+/** Deckbit's own 1–10 power rating with the factors behind it. */
 export interface PowerRating {
   score: number; // 1..10
   label: string;

@@ -22,7 +22,7 @@ function rankKey(d: BuiltDeck): number {
 
 /**
  * "Fuck my shit up fam": build the strongest candidates among the commanders you own, at the
- * chosen bracket, and rank the finished decks by BulkBrew's power model. Candidates are picked by
+ * chosen bracket, and rank the finished decks by Deckbit's power model. Candidates are picked by
  * how much strong, on-colour material you own for each (game changers and EDHREC staples) plus
  * how established the commander is on EDHREC, so it doesn't build all 200 of your legends.
  */
@@ -96,7 +96,7 @@ export function PowerGauntlet({ commanders, cards, bracket, decksOf, base, onOpe
   return (
     <Panel tone="gold" title="Fuck my shit up fam">
       <p className="text-[17px] text-cream-dim">
-        Builds your {Math.min(depth, ranked.length)} most dangerous commanders at bracket {bracket} and ranks the finished decks by BulkBrew&apos;s power model
+        Builds your {Math.min(depth, ranked.length)} most dangerous commanders at bracket {bracket} and ranks the finished decks by Deckbit&apos;s power model
         (fast mana, tutors, combos, interaction, curve). Contenders are picked by how many game changers and EDHREC staples you own in their colours.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -140,7 +140,7 @@ export function PowerGauntlet({ commanders, cards, bracket, decksOf, base, onOpe
           <Notice>
             Second opinions: copy the winner&apos;s list and paste it into{" "}
             <a href="https://edhpowerlevel.com" target="_blank" rel="noreferrer" className="text-orange underline">edhpowerlevel.com</a> or{" "}
-            <a href="https://commandersalt.com" target="_blank" rel="noreferrer" className="text-orange underline">commandersalt.com</a>. Neither offers an API, so BulkBrew can&apos;t ask them directly.{" "}
+            <a href="https://commandersalt.com" target="_blank" rel="noreferrer" className="text-orange underline">commandersalt.com</a>. Neither offers an API, so Deckbit can&apos;t ask them directly.{" "}
             <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(deckToText(best.deck!))}>copy winner</Button>
           </Notice>
         </div>

@@ -1,4 +1,4 @@
--- BulkBrew cloud sync schema. Paste into Supabase → SQL Editor → Run. Safe to re-run.
+-- Deckbit cloud sync schema. Paste into Supabase → SQL Editor → Run. Safe to re-run.
 --
 -- One generic table holds every synced record (collection cards, saved decks, reference decks,
 -- wishlist) as JSON, keyed by (user, kind, id). Row Level Security means each signed-in user can

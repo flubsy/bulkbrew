@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { SharedDeck } from "@/components/shared-deck";
 
-export const metadata: Metadata = { title: "Shared deck", description: "A Magic deck shared from BulkBrew." };
+export const metadata: Metadata = { title: "Shared deck", description: "A Magic deck shared from Deckbit." };
 
 export default function SharedDeckPage({ params }: PageProps<"/d/[id]">) {
   return (

@@ -2,6 +2,7 @@ import { BASIC_LANDS, isBasic, manaPips } from "../scryfall";
 import { FORMATS, THEMES, type BuildOptions, type BuiltDeck, type CardData, type Color, type DeckEntry, type DeckProfile, type EdhrecCard, type ReferenceDeck, type Role, type TrendFlag } from "../types";
 import { commanderHooks, creatureTypes, THEME_PATTERNS, FINISHER_LABEL, FINISHER_THEMES, finisherKind, type FinisherKind, isCreature, isExtraTurn, isFastMana, isGameChanger, isLand, isMassLandDenial, themeScore } from "./classify";
 import { needCounts, synergyWith, unmetNeed } from "./needs";
+import { similarFit } from "./similar";
 import { ratePower } from "./power";
 import { classifyCard } from "./roles";
 import { cardTags, type TagKey } from "./tags";
@@ -42,6 +43,10 @@ export interface EdhrecContext {
   archetypeLabel?: string;
   /** Release date of the commander's printing: cards newer than it are under-counted by EDHREC. */
   commanderReleased?: string;
+  /** Real decklists for the commander (lower-case names, no basics), for "decks like yours". */
+  sampleDecks?: string[][];
+  /** How many sample decks came from each source. */
+  sampleSources?: Record<string, number>;
 }
 
 export const EMPTY_EDHREC: EdhrecContext = { cards: [], averageDeck: [], commanderDecks: null };
@@ -716,6 +721,47 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
     synergySwaps.push(`${best.out.name} → ${best.inC.card.name} (${best.why})`);
   }
   if (synergySwaps.length) notes.push(`Synergy pass: ${synergySwaps.join("; ")}.`);
+
+  // 3d. Decks like yours. Real decklists for this commander, weighted by how much they overlap
+  // the list so far: a bench card the closest decks run far more often than average beats the
+  // weakest card in its slot (same rules as the synergy pass). Re-weighted after every swap.
+  const likeYours: string[] = [];
+  let similarity: ReturnType<typeof similarFit> = null;
+  if (ed.sampleDecks?.length) {
+    for (let i = 0; i < 8; i++) {
+      similarity = similarFit(ed.sampleDecks, picked.filter((e) => e.role !== "land").map((e) => e.name));
+      if (!similarity) break;
+      const sim = similarity;
+      let best: { inC: Candidate; out: DeckEntry; outC: Candidate; gain: number } | null = null;
+      for (const p of synBench) {
+        if (pickedNames.has(p.card.name) || !canAfford(p) || sim.fit(p.card.name) < 1.5) continue;
+        if (p.flagged.includes("game changer") && gcUsed >= gcCap) continue;
+        if (!supported(p)) continue;
+        for (const e of picked) {
+          const c = byName.get(e.name);
+          if (!c || c.reasons[0] === "must include" || e.reason.startsWith("Combo piece") || c.role === "land") continue;
+          if (c.role !== p.role && !(FLEX_ROLES.has(c.role) && FLEX_ROLES.has(p.role))) continue;
+          const gain = p.score + sim.fit(p.card.name) - (c.score + sim.fit(e.name));
+          if (gain >= 2 && (!best || gain > best.gain)) best = { inC: p, out: e, outC: c, gain };
+        }
+      }
+      if (!best) break;
+      const share = Math.round(sim.share(best.inC.card.name) * 100);
+      drop(best.out, best.outC);
+      if (!take(best.inC, copiesFor(best.inC), "decks like yours")) {
+        pickedNames.delete(best.outC.card.name);
+        take(best.outC, best.out.quantity, best.out.reason);
+        break;
+      }
+      const b = Math.min(6, Math.floor(best.inC.card.cmc));
+      cmcCount[b] = (cmcCount[b] ?? 0) + copiesFor(best.inC);
+      picked[picked.length - 1].reason += ` · in ${share}% of the decks most like this one`;
+      likeYours.push(`${best.out.name} → ${best.inC.card.name} (${share}%)`);
+    }
+    const src = Object.entries(ed.sampleSources ?? {}).filter(([, n]) => n).map(([k, n]) => `${n} from ${k}`).join(", ");
+    if (similarity) notes.push(`Decks like yours: compared with ${similarity.samples} real ${ed.commanderName ?? ""} decklists (${src}); the closest share about ${Math.round(similarity.topOverlap * 100)}% of this list.${likeYours.length ? ` Swapped ${likeYours.join("; ")}.` : " Nothing on your bench beat what's here."}`);
+    else notes.push(`Decks like yours: only ${ed.sampleDecks.length} real decklists found (${src || "none"}), too few to compare, so this step was skipped.`);
+  }
 
   const nonLandsPicked = count();
   if (nonLandsPicked < nonLandTarget) warnings.push(`Only ${nonLandsPicked} eligible non-land cards found for ${nonLandTarget} slots — the collection is thin for this build. Loosen the filters or add cards.`);

@@ -1,5 +1,5 @@
 /**
- * Display currency. Every price in BulkBrew is stored in USD (Scryfall's TCGplayer price) and
+ * Display currency. Every price in Deckbit is stored in USD (Scryfall's TCGplayer price) and
  * converted for display only, using daily ECB rates from /api/fx. Budgets typed in the chosen
  * currency are converted back to USD before they reach the engine.
  */

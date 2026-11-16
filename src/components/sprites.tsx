@@ -340,7 +340,7 @@ export const TENTACLE = [
   "ssss....",
 ];
 
-/** Cauldron mark (11×11): BulkBrew's logo glyph, nav and favicon companion. */
+/** Cauldron mark (11×11): Deckbit's logo glyph, nav and favicon companion. */
 export const ICON_CAULDRON = [
   "...y...y...",
   "....y.y....",

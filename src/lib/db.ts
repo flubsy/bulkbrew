@@ -21,7 +21,7 @@ export type Synced<T> = T & { _dirty?: 1; updatedAt?: number };
 export const SYNCED = ["owned", "refDecks", "builds", "wishlist"] as const;
 export type SyncKind = (typeof SYNCED)[number];
 
-class BulkBrewDB extends Dexie {
+class DeckbitDB extends Dexie {
   owned!: EntityTable<Synced<OwnedCard>, "id">;
   refDecks!: EntityTable<Synced<ReferenceDeck>, "id">;
   builds!: EntityTable<Synced<BuiltDeck>, "id">;
@@ -55,7 +55,7 @@ class BulkBrewDB extends Dexie {
   }
 }
 
-export const db = new BulkBrewDB();
+export const db = new DeckbitDB();
 
 type AnyRow = Synced<Record<string, unknown>>;
 
@@ -143,7 +143,7 @@ export async function exportBackup(): Promise<Backup> {
 }
 
 export async function importBackup(b: Backup, mode: "merge" | "replace") {
-  if (b.app !== "deckbit") throw new Error("Not a BulkBrew backup file.");
+  if (b.app !== "deckbit") throw new Error("Not a Deckbit backup file.");
   if (mode === "replace") for (const k of SYNCED) await clearSynced(k);
   await db.transaction("rw", [db.owned, db.refDecks, db.builds, db.wishlist], async () => {
     await db.owned.bulkPut(b.owned ?? []);

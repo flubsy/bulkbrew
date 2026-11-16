@@ -17,11 +17,11 @@ const atkinson = Atkinson_Hyperlegible({ weight: ["400", "700"], subsets: ["lati
 const FONT_SCRIPT = `try{var f=localStorage.getItem("deckbit.font");if(f)document.documentElement.dataset.font=f}catch(e){}`;
 
 export const metadata: Metadata = {
-  title: { default: "BulkBrew", template: "%s · BulkBrew" },
+  title: { default: "Deckbit", template: "%s · Deckbit" },
   description: "Build the strongest Magic deck from the cards you already own. Import your collection, pick a commander, theme, bracket and budget, and let the engine (plus AI) do the rest.",
-  applicationName: "BulkBrew",
+  applicationName: "Deckbit",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "BulkBrew", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Deckbit", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {
@@ -50,7 +50,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <SiteAnalytics />
         </Suspense>
         <footer className="hidden border-t-4 border-navy-600 py-6 text-center text-[15px] text-muted md:block">
-          <a href="/faq" className="text-orange underline underline-offset-4">How BulkBrew works</a> · Card data and prices from Scryfall. BulkBrew is unofficial Fan Content permitted under the Fan Content Policy. Not approved or endorsed by Wizards.
+          <a href="/faq" className="text-orange underline underline-offset-4">How Deckbit works</a> · Card data and prices from Scryfall. Deckbit is unofficial Fan Content permitted under the Fan Content Policy. Not approved or endorsed by Wizards.
         </footer>
       </body>
     </html>

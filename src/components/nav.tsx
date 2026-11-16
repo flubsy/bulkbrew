@@ -98,7 +98,7 @@ export function Nav() {
           <Link href="/" className="flex items-center gap-3">
             <Sprite grid={ICON_CAULDRON} scale={3} />
             <span className="font-wordmark text-[12px] text-cream">
-              Bulk<span className="text-orange">Brew</span>
+              Deck<span className="text-orange">bit</span>
             </span>
           </Link>
           <nav className="hidden items-center gap-5 lg:flex" aria-label="Primary">
