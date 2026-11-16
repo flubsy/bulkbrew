@@ -1,4 +1,7 @@
 import type { CardData } from "../types";
+import { cardTags, type TagKey } from "./tags";
+
+const tagged = (c: CardData, ...keys: TagKey[]) => { const t = cardTags(c.name); return keys.some((k) => t.has(k)); };
 
 /**
  * Cards that only work when the rest of the deck feeds them. Skullclamp with nothing to clamp,
@@ -13,7 +16,7 @@ import type { CardData } from "../types";
 
 const front = (c: CardData) => c.typeLine.split("//")[0];
 const isCreature = (c: CardData) => /\bCreature\b/.test(front(c));
-const makesCreatureTokens = (c: CardData) => /create[^.]*\bcreature tokens?\b|create[^.]*\b\d+\/\d+\b[^.]*\btokens?\b|create[^.]*\btokens? that'?s? a copy/i.test(c.oracleText);
+const makesCreatureTokens = (c: CardData) => tagged(c, "tokenMaker") || /create[^.]*\bcreature tokens?\b|create[^.]*\b\d+\/\d+\b[^.]*\btokens?\b|create[^.]*\btokens? that'?s? a copy/i.test(c.oracleText);
 
 interface Need {
   id: string;
@@ -37,14 +40,14 @@ const NEEDS: Need[] = [
   {
     id: "sacrifice",
     // Free sac outlets and "whenever a creature dies" payoffs. Not edicts or one-off sacrifice costs.
-    payoff: (c) => /sacrifice (a|another) creature:|whenever (a|another) (nontoken )?creature (you control )?dies|whenever (a|another) creature you control dies/i.test(c.oracleText) && !/each (opponent|player) sacrifices/i.test(c.oracleText),
+    payoff: (c) => tagged(c, "sacOutlet") || /sacrifice (a|another) creature:|whenever (a|another) (nontoken )?creature (you control )?dies|whenever (a|another) creature you control dies/i.test(c.oracleText) && !/each (opponent|player) sacrifices/i.test(c.oracleText),
     supplier: (c) => makesCreatureTokens(c) || (isCreature(c) && c.cmc <= 2),
     min: 12,
     why: (have, min) => `wants a steady supply of creatures to sacrifice (tokens or cheap creatures), and the list has ${have} (wants ${min}+)`,
   },
   {
     id: "spells",
-    payoff: (c) => /whenever you cast (or copy )?an instant or sorcery|magecraft/i.test(c.oracleText),
+    payoff: (c) => tagged(c, "spellsMatter") || /whenever you cast (or copy )?an instant or sorcery|magecraft/i.test(c.oracleText),
     supplier: (c) => /\b(Instant|Sorcery)\b/.test(front(c)),
     min: 15,
     why: (have, min) => `pays off instants and sorceries, and the list has ${have} (wants ${min}+)`,
@@ -67,7 +70,7 @@ const NEEDS: Need[] = [
   {
     id: "lifegain",
     payoff: (c) => /whenever you gain life/i.test(c.oracleText),
-    supplier: (c) => /\byou gain \d+ life|gain(s)? (that much|x|\d+) life|\blifelink\b/i.test(c.oracleText) || c.keywords.includes("Lifelink"),
+    supplier: (c) => tagged(c, "lifegain") || /\byou gain \d+ life|gain(s)? (that much|x|\d+) life|\blifelink\b/i.test(c.oracleText) || c.keywords.includes("Lifelink"),
     min: 8,
     why: (have, min) => `triggers on gaining life, and the list has ${have} life-gain cards (wants ${min}+)`,
   },
@@ -81,14 +84,14 @@ const NEEDS: Need[] = [
   {
     id: "counters",
     payoff: (c) => /whenever one or more \+1\/\+1 counters|with a \+1\/\+1 counter on it|for each \+1\/\+1 counter/i.test(c.oracleText),
-    supplier: (c) => /put (a|an|one|two|three|x|that many|\w+) \+1\/\+1 counters?|enters? with [^.]*\+1\/\+1 counters?|\bproliferate\b/i.test(c.oracleText),
+    supplier: (c) => tagged(c, "counterPlacer") || /put (a|an|one|two|three|x|that many|\w+) \+1\/\+1 counters?|enters? with [^.]*\+1\/\+1 counters?|\bproliferate\b/i.test(c.oracleText),
     min: 8,
     why: (have, min) => `cares about +1/+1 counters, and the list has ${have} cards that place them (wants ${min}+)`,
   },
   {
     id: "artifacts",
     payoff: (c) => /whenever (an|another) (nontoken )?artifact (you control )?enters|for each artifact you control|affinity for artifacts|\bmetalcraft\b|\bimprovise\b|artifacts? you control (get|have)/i.test(c.oracleText),
-    supplier: (c) => /\bArtifact\b/.test(front(c)) || /create[^.]*\b(treasure|clue|food|blood|artifact) tokens?/i.test(c.oracleText),
+    supplier: (c) => /\bArtifact\b/.test(front(c)) || tagged(c, "treasureMaker") || /create[^.]*\b(treasure|clue|food|blood|artifact) tokens?/i.test(c.oracleText),
     min: 15,
     why: (have, min) => `scales with artifacts, and the list has ${have} (wants ${min}+)`,
   },

@@ -177,6 +177,8 @@ export function ComboList({ combos, showMissing = false }: { combos: Combo[]; sh
           <div className="mt-1 text-[14px] text-cream-dim">
             {c.produces.join(" · ")}
             {c.bracketTag && <span className="ml-2 font-pixel text-[11px] text-gold">{c.bracketTag}</span>}
+            {c.featured && <span className="ml-2 font-pixel text-[11px] text-orange" title="On Commander Spellbook's featured list">Featured</span>}
+            {!!c.popularity && <span className="ml-2 text-[13px] text-muted" title="Decks on EDHREC running this combo, per Commander Spellbook">in {c.popularity.toLocaleString()} decks</span>}
             {showMissing && c.missing.length > 0 && <span className="ml-2 text-orange">needs {c.missing.join(" + ")} (owned)</span>}
             <a href={c.url} target="_blank" rel="noreferrer" className="ml-2 text-sea-light underline">how it works</a>
           </div>

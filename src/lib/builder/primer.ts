@@ -1,6 +1,8 @@
 import type { BuiltDeck, CardData, Combo, DeckEntry, Primer, ThemeId } from "../types";
 import { THEMES } from "../types";
+import { FINISHER_LABEL, finisherKind, type FinisherKind } from "./classify";
 import { detectThemes } from "./commanders";
+import { cardTags } from "./tags";
 
 /**
  * "How this deck works" — a primer written entirely from data:
@@ -66,7 +68,70 @@ function strength(c: DeckEntry) {
   return (c.edhrec?.synergy ?? 0) * 10 + (c.edhrec?.inclusion ?? 0) * 6 + (c.inAverageDeck ? 3 : 0) + c.score * 0.2;
 }
 
-export function buildPrimer(deck: Pick<BuiltDeck, "cards" | "commanders" | "stats" | "options" | "combos">, commanderCards: CardData[], tagLabel?: string): Primer {
+/** Short tag for a key card: what it does here, in two or three words. */
+function shortWhy(c: DeckEntry): string {
+  if (c.gameChanger) return "game changer";
+  if ((c.edhrec?.synergy ?? 0) >= 0.25) return "high synergy";
+  const byRole: Partial<Record<string, string>> = {
+    ramp: "ramp", draw: "card advantage", removal: "removal", wipe: "board wipe", counter: "counterspell", tutor: "tutor",
+    protection: "protection", recursion: "recursion", finisher: "finisher",
+  };
+  return byRole[c.role] ?? (c.inAverageDeck || c.edhrec ? "core piece" : "engine");
+}
+
+/**
+ * Per kind of finisher: how it ends the game, and the board to aim for before casting it.
+ * `n` has the deck's own counts so the advice uses real numbers.
+ */
+type Counts = { creatures: number; tokenMakers: number; outlets: string[]; drawEngines: string[]; proliferate: string[]; spells: number };
+const FINISH: Record<FinisherKind, { how: string; board: (n: Counts) => string }> = {
+  overrun: {
+    how: "Pumps your whole team at once for one big attack, usually lethal across the table when you go wide.",
+    board: (n) => `6+ creatures on board (tokens count), then cast it in your main phase before attacking, ideally when opponents are tapped low or have just wiped. You have ${n.creatures} creatures${n.tokenMakers ? ` and ${n.tokenMakers} token makers` : ""} to get there.`,
+  },
+  drain: {
+    how: "Drains every opponent at once, so damage adds up across the table instead of one player at a time.",
+    board: (n) => (n.outlets.length ? `A sacrifice outlet (${list(n.outlets.slice(0, 3), "or")}) and a wide board, then sacrifice everything in one turn to finish.` : "As many triggers lined up as you can; a free sacrifice outlet turns a board of creatures into a lethal burst."),
+  },
+  burn: {
+    how: "Deals damage to each opponent at once, and grows with the number of triggers or the mana you put in.",
+    board: (n) => `Opponents around half life: build up triggers over a few turns and fire it as reach once combat has worn them down.${n.spells >= 15 ? ` ${n.spells} instants and sorceries keep it fed.` : ""}`,
+  },
+  altwin: {
+    how: "Wins the game outright once its condition is met, regardless of life totals.",
+    board: () => "The condition met, with protection or a counterspell held up so it survives until it checks.",
+  },
+  infect: {
+    how: "Poison: ten counters knocks a player out no matter their life total, so infect damage counts ten times as much as normal damage.",
+    board: (n) => `One target at a time: focus poison on them. Evasion and pump spells close the gap fast${n.proliferate.length ? `; ${list(n.proliferate.slice(0, 2))} add${n.proliferate.length === 1 ? "s" : ""} a counter to every poisoned player` : ""}.`,
+  },
+  combat: {
+    how: "Extra combat steps double (or triple) a turn's damage: the attackers untap and swing again.",
+    board: () => "A board that can already deal about half of what you need; the second attack does the rest.",
+  },
+  mill: {
+    how: "Empties libraries: a player who has to draw from an empty library loses.",
+    board: () => "Libraries already low: mill a little each turn and save the big mill for last. Watch for cards that shuffle graveyards back.",
+  },
+  drawdrain: {
+    how: "Every card you draw pings each opponent, so a big draw turn turns straight into damage.",
+    board: (n) => (n.drawEngines.length ? `It on the battlefield before a big draw turn: ${list(n.drawEngines.slice(0, 3))}.` : "A big draw spell or a wheel to follow it; on its own it only chips away."),
+  },
+  threat: {
+    how: "A big threat that ends games in two or three swings if it isn't answered.",
+    board: () => "Opponents tapped out or just out of removal when you cast it, and protection held up the turn after.",
+  },
+};
+
+const WIN_WORDS = /win|damage|life|lose|mill|combat|poison|counter on each opponent/i;
+
+/** Plain-English line for a combo's result. */
+function comboResult(c: Combo): string {
+  const r = c.produces.slice(0, 3).map((x) => x.toLowerCase());
+  return r.length ? `${r.join(", ").replace(/^./, (m) => m.toUpperCase())}.` : "A loop Commander Spellbook lists as a combo.";
+}
+
+export function buildPrimer(deck: Pick<BuiltDeck, "cards" | "commanders" | "stats" | "options" | "combos">, commanderCards: CardData[], tagLabel?: string, cardData: CardData[] = []): Primer {
   const cards = deck.cards;
   const nonLand = cards.filter((c) => c.role !== "land");
   const count = (role: string) => cards.filter((c) => c.role === role).reduce((s, c) => s + c.quantity, 0);
@@ -94,28 +159,101 @@ export function buildPrimer(deck: Pick<BuiltDeck, "cards" | "commanders" | "stat
   if (cmdTurn) plan.push(`${ramp} ramp and ${lands} lands put ${cmd} out around turn ${cmdTurn}${curve ? `, with ${curve}` : ""}.`);
   else if (curve) plan.push(`The deck has ${curve}.`);
 
-  // ---- Key cards: the engines that make the deck tick.
+  // ---- Key cards: the engines that make the deck tick (just a short tag each).
   const keyCards = [...nonLand]
     .filter((c) => c.role !== "ramp" || (c.edhrec?.synergy ?? 0) > 0.2)
     .sort((a, b) => strength(b) - strength(a))
-    .slice(0, 4)
-    .map((c) => ({ name: c.name, why: c.reason }));
+    .slice(0, 5)
+    .map((c) => ({ name: c.name, why: shortWhy(c) }));
 
-  // ---- Win conditions.
-  // One line per kind of win: every combo, then all finishers together, then big threats together.
+  // ---- How it wins. One entry per route: each combo, each kind of finisher, the commander
+  // itself, else the big threats. Every entry says how it ends the game, the board to aim for,
+  // and what in the list helps set it up.
+  const data = new Map([...cardData, ...commanderCards].map((c) => [c.name.toLowerCase(), c] as const));
+  const oracle = (name: string) => data.get(name.toLowerCase())?.oracleText ?? "";
+  const by = (pred: (c: DeckEntry) => boolean) => nonLand.filter(pred).sort((a, b) => strength(b) - strength(a));
+  const tutors = names(by((c) => c.role === "tutor"), 3);
+  const shields = names(by((c) => c.role === "protection" || c.role === "counter"), 3);
+  const counts: Counts = {
+    creatures: cards.filter((c) => /Creature/.test(c.typeLine)).reduce((s, c) => s + c.quantity, 0),
+    tokenMakers: nonLand.filter((c) => /create[^.]*\btoken/i.test(oracle(c.name))).length,
+    outlets: names(by((c) => /sacrifice (a|another) creature:/i.test(oracle(c.name))), 3),
+    drawEngines: names(by((c) => c.role === "draw" || /draws? (two|three|seven|x|cards)|each player draws/i.test(oracle(c.name))), 3),
+    proliferate: names(by((c) => /\bproliferate\b/i.test(oracle(c.name))), 2),
+    spells: nonLand.filter((c) => /Instant|Sorcery/.test(c.typeLine)).reduce((s, c) => s + c.quantity, 0),
+  };
+  // Cards that turn endless death/enter/token triggers into a win (Blood Artist-style drains).
+  const payoffs = names(by((c) => /whenever [^.]*(dies|enters|leaves)[^.]*(each opponent loses|loses \d+ life|deals? \d+ damage)/i.test(oracle(c.name))), 3);
+  const sinks = names(by((c) => /\{X\}/.test(c.manaCost) || /\{X\}[^.]*:/.test(oracle(c.name))), 2);
   const winCons: Primer["winCons"] = [];
-  for (const c of combos.slice(0, 2)) winCons.push({ name: c.cards.join(" + "), how: `Combo: ${c.produces.slice(0, 2).join(", ").toLowerCase()}.` });
-  const finishers = nonLand.filter((x) => x.role === "finisher").sort((a, b) => strength(b) - strength(a));
-  if (finishers.length) {
-    const n = names(finishers, 4);
-    winCons.push({ name: list(n), how: n.length > 1 ? "Finishers: cast one once the board is set up and it ends the game in a turn or two." : "Finisher: cast it once the board is set up and it ends the game in a turn or two." });
+
+  // Combos: the most-played (and featured) first, three at most.
+  for (const c of combos.slice(0, 3)) {
+    const winsOnItsOwn = c.produces.some((x) => WIN_WORDS.test(x));
+    const finisherPiece = c.cards.find((n) => nonLand.some((e) => e.name === n && e.role === "finisher"));
+    const how = [comboResult(c)];
+    const triggerKind = c.produces.map((x) => /infinite (death|sacrifice|etb|enter|creature token|token)/i.exec(x)?.[1]?.toLowerCase()).find(Boolean);
+    if (!winsOnItsOwn && triggerKind && payoffs.length) how.push(`With ${list(payoffs.slice(0, 2), "or")} out, the endless ${triggerKind === "etb" || triggerKind === "enter" ? "enter" : triggerKind.startsWith("creature") || triggerKind === "token" ? "token" : triggerKind} triggers drain the table: that's the kill.`);
+    else if (!winsOnItsOwn && c.produces.some((x) => /infinite (\w+ )?mana/i.test(x))) how.push(sinks.length ? `Infinite mana doesn't win on its own: pour it into ${list(sinks, "or")}.` : "Infinite mana doesn't win on its own: you need something to spend it on, like an X spell or an activated ability.");
+    else if (!winsOnItsOwn) how.push("It's an engine, not a kill: it gives you an edge that a finisher then cashes in.");
+    if (finisherPiece) how.push(`${finisherPiece} is both a finisher and a combo piece, so protect it.`);
+    if (c.featured) how.push("One of Commander Spellbook's featured combos.");
+    else if ((c.popularity ?? 0) >= 1000) how.push(`A well-known line: ${c.popularity!.toLocaleString()} decks on EDHREC run it.`);
+    const setup = [
+      c.manaNeeded ? `${c.manaNeeded} mana to assemble` : "",
+      tutors.length ? `find missing pieces with ${list(tutors, "or")}` : "",
+      shields.length ? `protect it with ${list(shields, "or")}` : "",
+    ].filter(Boolean);
+    winCons.push({
+      kind: "combo",
+      name: c.cards.join(" + "),
+      how: how.join(" "),
+      board: c.requires ? c.requires.replace(/\s+/g, " ").trim() : "All pieces on the battlefield (or in hand, for instants).",
+      setup: setup.length ? `${setup.join("; ").replace(/^./, (m) => m.toUpperCase())}.` : undefined,
+    });
   }
+
+  // Finishers, grouped by how they win (two overruns are one plan, not two).
+  const finishers = by((x) => x.role === "finisher");
+  const byKind = new Map<FinisherKind | "other", DeckEntry[]>();
+  for (const f of finishers) {
+    const card = data.get(f.name.toLowerCase());
+    const kind = card ? finisherKind(card, cardTags(card.name)) ?? "other" : "other";
+    byKind.set(kind, [...(byKind.get(kind) ?? []), f]);
+  }
+  for (const [kind, group] of byKind) {
+    const n = names(group, 3);
+    if (kind === "other") {
+      winCons.push({ kind: "finisher", name: list(n), how: `${n.length > 1 ? "Finishers" : "Finisher"}: cast once the board is set up; ${n.length > 1 ? "each ends" : "it ends"} the game in a turn or two.` });
+      continue;
+    }
+    const spec = FINISH[kind];
+    let how = spec.how;
+    if (kind === "altwin") {
+      const clause = oracle(group[0].name).split(/\n|(?<=\.)\s+(?=[A-Z])/).find((l) => /win the game|loses the game/i.test(l));
+      if (clause) how = `${how} ${group[0].name}: “${clause.trim()}”`;
+    }
+    const inCombo = group.filter((g) => combos.some((c) => c.cards.includes(g.name))).map((g) => g.name);
+    if (inCombo.length) how += ` ${list(inCombo)} also ${inCombo.length === 1 ? "appears" : "appear"} in a combo above.`;
+    const setup = kind === "altwin" && tutors.length ? `Find it with ${list(tutors, "or")}.` : kind === "threat" && shields.length ? `Protect it with ${list(shields, "or")}.` : undefined;
+    winCons.push({ kind: "finisher", name: list(n), how: `${FINISHER_LABEL[kind].replace(/^./, (m) => m.toUpperCase())}. ${how}`, board: spec.board(counts), setup });
+  }
+
+  // The commander as the win condition.
+  const cmdKind = cmdCard ? finisherKind(cmdCard, cardTags(cmdCard.name)) : null;
+  if (deck.options.themes.includes("voltron")) {
+    const gear = names(by((c) => /Equipment|Aura/.test(c.typeLine)), 3);
+    winCons.unshift({ kind: "commander", name: cmd, how: "Commander damage: 21 combat damage from your commander knocks a player out, whatever their life total.", board: `Suit ${cmd} up${gear.length ? ` with ${list(gear)}` : ""} and give it evasion; it only needs three or four connected hits.`, setup: shields.length ? `Keep ${list(shields, "or")} ready: the deck stalls if ${cmd} dies.` : undefined });
+  } else if (cmdKind && cmdKind !== "threat") {
+    winCons.unshift({ kind: "commander", name: cmd, how: `${FINISHER_LABEL[cmdKind].replace(/^./, (m) => m.toUpperCase())}. ${FINISH[cmdKind].how}`, board: FINISH[cmdKind].board(counts) });
+  }
+
+  // Nothing else: the biggest threats.
   if (winCons.length < 2) {
-    const beaters = nonLand.filter((c) => c.role !== "finisher" && /Creature/.test(c.typeLine) && c.cmc >= 4).sort((a, b) => strength(b) - strength(a));
+    const beaters = by((c) => c.role !== "finisher" && /Creature/.test(c.typeLine) && c.cmc >= 4);
     const n = names(beaters, 3);
-    if (n.length) winCons.push({ name: list(n), how: n.length > 1 ? "Big threats: the main ways the deck closes games in combat." : "Big threat: the main way the deck closes games in combat." });
+    if (n.length) winCons.push({ kind: "threats", name: list(n), how: "Combat: the deck's biggest creatures close the game over a few turns of attacks.", board: FINISH.threat.board(counts) });
   }
-  if (deck.options.themes.includes("voltron")) winCons.unshift({ name: cmd, how: "Commander damage: 21 from your commander knocks a player out." });
 
   // ---- Mulligan: one rule of thumb, one line of what to look for.
   const cheapRamp = nonLand.filter((c) => c.role === "ramp" && c.cmc <= 2).sort((a, b) => a.cmc - b.cmc || strength(b) - strength(a));
@@ -150,5 +288,5 @@ export function buildPrimer(deck: Pick<BuiltDeck, "cards" | "commanders" | "stat
   const theme = tagLabel ?? (deck.options.tribe ? `${deck.options.tribe} tribal` : themeIds.map((t) => LABEL[t]).filter(Boolean).join(" / "));
   const summary = `${cmd}${theme ? ` ${theme}` : ""}: ${strategy ? strategy.split(/[,.;]/)[0].toLowerCase() : "a goodstuff build"}. Power ${deck.stats.power?.score ?? "?"}/10.`;
 
-  return { summary, plan, keyCards, winCons: winCons.slice(0, 3), mulligan, phases, watchOut };
+  return { summary, plan, keyCards, winCons: winCons.slice(0, 5), mulligan, phases, watchOut };
 }

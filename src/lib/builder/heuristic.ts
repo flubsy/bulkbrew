@@ -1,9 +1,32 @@
 import { BASIC_LANDS, isBasic, manaPips } from "../scryfall";
 import { FORMATS, THEMES, type BuildOptions, type BuiltDeck, type CardData, type Color, type DeckEntry, type DeckProfile, type EdhrecCard, type ReferenceDeck, type Role, type TrendFlag } from "../types";
-import { commanderHooks, creatureTypes, FINISHER_LABEL, FINISHER_THEMES, finisherKind, type FinisherKind, isCreature, isExtraTurn, isFastMana, isGameChanger, isLand, isMassLandDenial, themeScore } from "./classify";
+import { commanderHooks, creatureTypes, THEME_PATTERNS, FINISHER_LABEL, FINISHER_THEMES, finisherKind, type FinisherKind, isCreature, isExtraTurn, isFastMana, isGameChanger, isLand, isMassLandDenial, themeScore } from "./classify";
 import { needCounts, synergyWith, unmetNeed } from "./needs";
 import { ratePower } from "./power";
 import { classifyCard } from "./roles";
+import { cardTags, type TagKey } from "./tags";
+
+/**
+ * Tagger tags that put a card on-theme even when its text doesn't match the theme's patterns
+ * (e.g. a sacrifice outlet for aristocrats, a ritual or cost reducer for storm).
+ */
+const THEME_TAGS: Partial<Record<string, TagKey[]>> = {
+  tokens: ["tokenMaker", "anthem", "massPump"],
+  aristocrats: ["sacOutlet", "deathTrigger", "drain"],
+  lifegain: ["lifegain"],
+  treasure: ["treasureMaker"],
+  storm: ["ritual", "costReducer", "copySpell"],
+  spellslinger: ["spellsMatter", "copySpell", "costReducer"],
+  graveyard: ["selfMill", "reanimate"],
+  blink: ["flicker"],
+  combat: ["extraCombat", "untapper"],
+  aggro: ["haste", "evasion", "massPump", "anthem"],
+  mill: ["mill"],
+  ramp: ["manaRock", "manaDork", "ritual"],
+  counters: ["counterPlacer"],
+  burn: ["burn"],
+  flying: ["evasion"],
+};
 
 /** Everything EDHREC told us for this build. */
 export interface EdhrecContext {
@@ -214,6 +237,11 @@ export function makeScorer(opts: BuildOptions, refs: ReferenceDeck[], commanders
 
     // Theme fit.
     const th = themeScore(c, opts.themes, tribe);
+    const tags = cardTags(c.name);
+    for (const t of opts.themes) {
+      if (th.reasons.includes(t)) continue;
+      if ((THEME_TAGS[t] ?? []).some((k) => tags.has(k))) { th.score += THEME_PATTERNS[t].weight; th.reasons.push(t); }
+    }
     score += th.score;
     reasons.push(...th.reasons);
     for (const r of th.reasons) {
@@ -295,7 +323,7 @@ export function makeScorer(opts: BuildOptions, refs: ReferenceDeck[], commanders
     // mark down generic ones with no link to the deck, so the same colourless win-con doesn't
     // land in every list.
     if (role === "finisher") {
-      const kind = finisherKind(c);
+      const kind = finisherKind(c, tags);
       if (kind) {
         const themeFit = FINISHER_THEMES[kind].some((t) => opts.themes.includes(t));
         const fits = themeFit || facts.hooks.length > 0 || !!facts.edhrec || facts.inAverageDeck || !!facts.tribe;
@@ -535,7 +563,7 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
   // outscore dorks, so green decks ended up all rocks. Green commander decks get a few of their
   // best cheap mana creatures first; they still count towards the ramp quota.
   const byName = new Map(sorted.map((c) => [c.card.name, c] as const));
-  const isDork = (p: Candidate) => isCreature(p.card) && !/\bLand\b/.test(p.card.typeLine.split("//")[0]) && p.card.cmc <= 2 && (p.role === "ramp" || /\{T\}: Add/.test(p.card.oracleText));
+  const isDork = (p: Candidate) => cardTags(p.card.name).has("manaDork") || isCreature(p.card) && !/\bLand\b/.test(p.card.typeLine.split("//")[0]) && p.card.cmc <= 2 && (p.role === "ramp" || /\{T\}: Add/.test(p.card.oracleText));
   if (meta.size === 100 && commanders.some((c) => c.colorIdentity.includes("G"))) {
     const dorkWant = Math.min(q.ramp ?? 0, bracket >= 3 ? 4 : 3);
     let dorks = picked.filter((e) => { const c = byName.get(e.name); return !!c && isDork(c); }).length;

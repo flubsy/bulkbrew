@@ -17,12 +17,13 @@ function tidy(p: Primer): Primer {
   return {
     ...p,
     keyCards: mergeSame(p.keyCards, (k) => k.why, (name, k) => ({ ...k, name })),
-    winCons: mergeSame(p.winCons, (w) => w.how, (name, w) => ({ name, how: w.how.replace(/^(Finisher|Big threat): /, "$1s: ").replace("cast it once", "cast one once").replace("one of the main ways", "the main ways") })),
+    // Older saved primers had one generic line per finisher; merge those. New ones are already grouped.
+    winCons: p.winCons.some((w) => w.kind) ? p.winCons : mergeSame(p.winCons, (w) => w.how, (name, w) => ({ name, how: w.how.replace(/^(Finisher|Big threat): /, "$1s: ").replace("cast it once", "cast one once").replace("one of the main ways", "the main ways") })),
   };
 }
 
 function primerText(deck: BuiltDeck, p: Primer): string {
-  const out = [`# ${deck.name ?? deck.commanders.map((c) => c.name).join(" / ")} primer`, "", p.summary, "", "## Game plan", ...p.plan.map((x) => `- ${x}`), "", "## Key cards", ...p.keyCards.map((k) => `- ${k.name}: ${k.why}`), "", "## How it wins", ...p.winCons.map((w) => `- ${w.name}: ${w.how}`)];
+  const out = [`# ${deck.name ?? deck.commanders.map((c) => c.name).join(" / ")} primer`, "", p.summary, "", "## Game plan", ...p.plan.map((x) => `- ${x}`), "", "## Key cards", p.keyCards.map((k) => `${k.name} (${k.why})`).join(", "), "", "## How it wins", ...p.winCons.flatMap((w) => [`- ${w.name}: ${w.how}`, ...(w.board ? [`  - Aim for: ${w.board}`] : []), ...(w.setup ? [`  - Set up: ${w.setup}`] : [])])];
   if (deck.combos?.length) {
     out.push("", "## Combos");
     for (const c of deck.combos) out.push(`- ${c.cards.join(" + ")} → ${c.produces.join(", ")}`);
@@ -84,12 +85,28 @@ export function PrimerView({ deck, onChange }: { deck: BuiltDeck; onChange?: (d:
         <ul className="grid gap-2">{p.plan.map((x, i) => <li key={i}>{x}</li>)}</ul>
       </Section>
 
-      <Section title="Key cards">
-        <ul className="grid gap-1">{p.keyCards.map((k) => <li key={k.name}><span className="text-cream">{k.name}</span> <span className="text-muted">· {k.why}</span></li>)}</ul>
+      <Section title="How it wins">
+        <ul className="grid gap-3">
+          {p.winCons.map((w) => (
+            <li key={w.name} className={w.kind ? "bg-navy-900 px-3 py-2" : ""}>
+              <div>
+                {w.kind && <span className="mr-2 font-pixel text-[11px] uppercase text-muted">{w.kind === "threats" ? "combat" : w.kind}</span>}
+                <span className="text-orange">{w.name}</span>
+              </div>
+              <div className="text-cream-dim">{w.how}</div>
+              {w.board && <div className="mt-1 text-[15px] text-cream-dim"><span className="text-gold">Aim for:</span> {w.board}</div>}
+              {w.setup && <div className="text-[15px] text-cream-dim"><span className="text-gold">Set up:</span> {w.setup}</div>}
+            </li>
+          ))}
+        </ul>
       </Section>
 
-      <Section title="How it wins">
-        <ul className="grid gap-1">{p.winCons.map((w) => <li key={w.name}><span className="text-orange">{w.name}</span> <span className="text-cream-dim">{w.how}</span></li>)}</ul>
+      <Section title="Key cards">
+        <p className="text-[16px]">
+          {p.keyCards.map((k, i) => (
+            <span key={k.name}>{i > 0 && <span className="text-muted"> · </span>}<span className="text-cream">{k.name}</span> <span className="text-muted">({k.why.length > 24 ? k.why.split(" · ")[0] : k.why})</span></span>
+          ))}
+        </p>
       </Section>
 
       {deck.combos && deck.combos.some((c) => c.steps) && (

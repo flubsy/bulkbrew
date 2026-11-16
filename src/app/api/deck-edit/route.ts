@@ -3,8 +3,8 @@ import { computeStats, sortDeck } from "@/lib/builder/heuristic";
 import { ratePower } from "@/lib/builder/power";
 import { buildPrimer } from "@/lib/builder/primer";
 import { classifyCard } from "@/lib/builder/roles";
-import { fetchNamed, normalizeCard, withImages } from "@/lib/scryfall";
-import { findCombos } from "@/lib/spellbook";
+import { cardsByName, fetchNamed, normalizeCard, withImages } from "@/lib/scryfall";
+import { applyBracketEstimate, findCombos } from "@/lib/spellbook";
 import type { BuiltDeck, CardData, DeckEntry } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -60,7 +60,11 @@ export async function POST(req: Request) {
       out.combos = (deck.combos ?? []).filter((k) => k.cards.every((n) => names.has(n.toLowerCase())));
     }
   }
+  await applyBracketEstimate(out);
   out.stats.power = ratePower(out, { combos: out.combos });
-  out.primer = buildPrimer(out, commanders);
+  // Card text for "how it wins": the added cards came with it, the rest are looked up.
+  const known = new Set((body.cards ?? []).map((c) => c.name.toLowerCase()));
+  const lookup = await cardsByName(out.cards.filter((c) => c.role !== "land" && !known.has(c.name.toLowerCase())).map((c) => c.name));
+  out.primer = buildPrimer(out, commanders, undefined, [...(body.cards ?? []), ...lookup]);
   return Response.json({ deck: withImages(out) });
 }

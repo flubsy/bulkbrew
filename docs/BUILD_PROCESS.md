@@ -67,6 +67,51 @@
    - Commander Spellbook combo scan, with a bracket warning.
    - Alternatives you own, and an EDHREC wishlist of cards you don't.
 
+## Scryfall Tagger tags (`src/data/roles.json`, `src/data/tags.json`)
+
+`npm run roles` (`scripts/build-roles.mjs`) downloads Scryfall Tagger's hand-curated function tags. Re-run it every month or two and commit the two JSON files.
+- **Roles:** ramp, removal, wipe, draw, tutor, counter, protection, recursion.
+- **Extra tags:** mana dork, mana rock, sacrifice outlet, death trigger, alternate win, win condition, token maker, treasure maker, anthem, mass pump, drain, burn, lifegain, extra combat, mill, self-mill, reanimate, flicker, cost reducer, ritual, copy spell, spells-matter, untapper, evasion, haste, +1/+1 counters, card advantage.
+
+For tags whose slug isn't confirmed, the script tries a few likely slugs in order and logs any it can't find.
+
+The tags are used in these places, always on top of the rules-text patterns (which remain the fallback):
+- **Roles:** win-condition tags become finishers, and dork or rock tags become ramp.
+- **Finisher kind:** an alternate win, mass pump or extra combat is read from tags first.
+- **Mana creatures:** the mana-dork tag.
+- **Theme fit:** a tagged card counts as on-theme. For example, sac outlets count for aristocrats, and rituals or cost reducers count for storm.
+- **Supply/payoff checks and the synergy pass:** sac outlets, token makers, lifegain, spells-matter, treasure makers and counter placers.
+
+## Bracket estimate
+
+When Commander Spellbook answers, the deck's bracket comes from its `/estimate-bracket` endpoint. That classifies every card (game changer, mass land denial, extra turn, banned) and every combo (two-card, lock, skip turns). We map that onto the 1–5 scale:
+- **Bracket 4:** more than 3 game changers, mass land denial, a lock-style combo, or the "Ruthless" tag.
+- **Bracket 3:** 1–3 game changers, or a two-card combo.
+- **Bracket 2:** otherwise.
+
+The deck shows the reasons. When Spellbook is unreachable, the estimate falls back to counting game changers.
+
+## Primer: how it wins (`builder/primer.ts`)
+
+Each way the deck can win gets its own entry, built from card text, the decklist and Commander Spellbook. It says how the route ends the game, the board to aim for, and what in the list sets it up.
+
+- **Combos** (up to 3, most-played first, Spellbook's featured picks ahead of ties):
+  - What the combo produces, and Spellbook's prerequisites as the board to aim for.
+  - Mana to assemble it, tutors to find the pieces, and protection or counterspells to keep it alive.
+  - If it doesn't win on its own: which payoff turns endless death or enter triggers into a kill, or what to spend infinite mana on (X spells, X abilities).
+  - Whether a finisher in the deck is also a combo piece.
+- **Finishers**, one entry per kind (overrun, drain, burn, alternate win, poison, extra combat, mill, draw-trigger damage, big threat):
+  - How that kind ends the game, and the board state to aim for, using the deck's own numbers (creatures, token makers, sacrifice outlets, draw engines, proliferate).
+  - Alternate-win cards quote their winning line.
+- **The commander:** commander damage for voltron decks, or the commander itself when it's a finisher.
+- **Big threats** as a fallback when nothing else qualifies.
+
+Key cards are just names with a short tag (ramp, card advantage, high synergy…).
+
+## Commander Spellbook
+
+The builder asks Spellbook for every combo the deck plus your 300 best bench cards can make (`find-my-combos`), not just ones on a list. Combos are ordered by popularity (EDHREC decks running them, per Spellbook), and the builder's combo pass weights it at 1.5 × log10(popularity). Spellbook's featured combos (`variants/?q=is:featured`, cached daily) get +2 and a "Featured" tag.
+
 ## Upgrade pipeline (`builder/upgrade.ts`)
 
 1. Resolve the imported list on Scryfall and score it with the **same scorer** as the builder.
