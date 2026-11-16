@@ -19,7 +19,7 @@ const R = {
   tutor: re("search your library for (a|an|up to) (?!(basic )?land)[^.]*card"),
   protection: re("hexproof|indestructible|protection from|can't be countered|phase out|regenerate|shroud|ward|prevent all damage|you have hexproof|gain .* indestructible"),
   recursion: re("return (target|a|up to \\w+) [^.]*card[^.]* from your graveyard (to your hand|to the battlefield)|from your graveyard to the battlefield|reanimate|escape|flashback|unearth|persist|undying"),
-  finisher: re("you win the game|each opponent loses|double|extra turn|infect|poison|annihilator|overrun|whenever .* deals combat damage to a player"),
+  finisher: re("you win the game|each opponent loses|double|extra turn|infect|poison|annihilator|overrun|whenever .* deals combat damage to a player|creatures you control (gain trample and )?get \\+(\\d+|x)/\\+(\\d+|x)[^.]*until end of turn|additional combat phase|each opponent mills"),
   extraTurn: re("take an extra turn|extra turns?"),
   massLandDenial: re("destroy all lands|each player sacrifices \\w+ lands|lands don't untap|destroy target land|sacrifice a land"),
   fastMana: re("^\\{0\\}$|^\\{1\\}$"),
@@ -163,6 +163,44 @@ export function commanderHooks(c: CardData): { pattern: RegExp; label: string }[
   add(/historic|legendary/.test(o), /Legendary|Saga|Artifact/, "legendaries & artifacts");
   return hooks;
 }
+
+/**
+ * How a finisher wins, so the builder can pick ones that fit the deck's plan (and not the same
+ * generic card in every list). null for cards that aren't really win conditions.
+ */
+export type FinisherKind = "overrun" | "drain" | "burn" | "altwin" | "infect" | "combat" | "mill" | "drawdrain" | "threat";
+
+export function finisherKind(c: CardData): FinisherKind | null {
+  const o = c.oracleText;
+  if (/you win the game|loses the game/i.test(o)) return "altwin";
+  if (/creatures you control (gain trample and )?get \+(\d+|x)\/\+(\d+|x)[^.]*until end of turn|overrun|until end of turn, creatures you control get/i.test(o)) return "overrun";
+  if (/\binfect\b|\btoxic\b|poison counters?/i.test(o) || c.keywords.some((k) => /Infect|Toxic/.test(k))) return "infect";
+  if (/whenever (you|a player|an opponent) draws? (a|one or more) cards?[^.]*(loses?|deals?)/i.test(o)) return "drawdrain";
+  if (/additional combat phase|extra combat/i.test(o)) return "combat";
+  if (/each opponent mills|target (player|opponent) mills (half|x|\d{2})/i.test(o)) return "mill";
+  if (/deals? (x|\d+) damage to each opponent|damage to each opponent/i.test(o)) return "burn";
+  if (/each opponent loses (x|\d+) life|loses? life equal|you gain life and each opponent loses|drain/i.test(o)) return "drain";
+  if (/\bCreature\b/.test(c.typeLine) && c.cmc >= 6) return "threat";
+  if (/annihilator|double (the|its|their) power|extra turn/i.test(o)) return "threat";
+  return null;
+}
+
+/** Themes each kind of finisher belongs in. */
+export const FINISHER_THEMES: Record<FinisherKind, ThemeId[]> = {
+  overrun: ["tokens", "tribal", "aggro", "counters", "landfall"],
+  drain: ["aristocrats", "lifegain", "tokens"],
+  burn: ["burn", "spellslinger", "storm", "aristocrats"],
+  altwin: ["combo", "control"],
+  infect: ["infect", "counters", "superfriends"],
+  combat: ["combat", "aggro", "voltron"],
+  mill: ["mill", "graveyard"],
+  drawdrain: ["wheels", "spellslinger", "storm"],
+  threat: ["ramp", "landfall", "cascade", "voltron"],
+};
+
+export const FINISHER_LABEL: Record<FinisherKind, string> = {
+  overrun: "overrun", drain: "drain", burn: "burn", altwin: "alternate win", infect: "poison", combat: "extra combat", mill: "mill", drawdrain: "draw-trigger damage", threat: "big threat",
+};
 
 export const isGameChanger = (c: CardData) => c.gameChanger;
 export const isExtraTurn = (c: CardData) => R.extraTurn.test(c.oracleText);

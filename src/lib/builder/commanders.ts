@@ -148,3 +148,54 @@ export function suggestCommanders(cards: CardData[], format: string, themes: The
   }
   return [...map.values()];
 }
+
+/* ----------------------------- Partners & backgrounds ----------------------------- */
+
+type PairKind = "partner" | "partnerWith" | "friends" | "background" | "companion" | "doctor";
+
+/** How a commander can pair up, from its keywords, rules text and type line. */
+export function pairKinds(c: CardData): { kind: PairKind; with?: string }[] {
+  const o = c.oracleText;
+  const out: { kind: PairKind; with?: string }[] = [];
+  const pw = /Partner with ([^\n(]+?)(?:\s*\(|\n|$)/.exec(o);
+  if (pw) out.push({ kind: "partnerWith", with: pw[1].trim() });
+  else if (c.keywords.includes("Partner") || /^Partner(\s*\(|$)/m.test(o)) out.push({ kind: "partner" });
+  if (/Friends forever/i.test(o) || c.keywords.includes("Friends forever")) out.push({ kind: "friends" });
+  if (/Choose a Background/i.test(o)) out.push({ kind: "background" });
+  if (/Doctor's companion/i.test(o) || c.keywords.includes("Doctor's companion")) out.push({ kind: "companion" });
+  if (/\bTime Lord Doctor\b/.test(c.typeLine.split("//")[0])) out.push({ kind: "doctor" });
+  return out;
+}
+
+/**
+ * Legal second commanders for `self` from your cards, following each pairing rule:
+ * Partner ↔ Partner, "Partner with X" → X only, Friends forever ↔ Friends forever,
+ * "Choose a Background" → Background enchantments, Doctor's companion ↔ Time Lord Doctors.
+ */
+export function partnerOptions(self: CardData, cards: CardData[], format: string): CardData[] {
+  const kinds = pairKinds(self);
+  if (!kinds.length) return [];
+  const legal = (c: CardData) => (format === "commander" ? c.legalities.commander === "legal" : format === "brawl" ? c.legalities.brawl === "legal" : true);
+  const out = new Map<string, CardData>();
+  for (const c of cards) {
+    if (c.name === self.name || out.has(c.name) || !legal(c)) continue;
+    const theirs = pairKinds(c).map((k) => k.kind);
+    const isBackground = /\bBackground\b/.test(c.typeLine.split("//")[0]) && /\bLegendary\b/.test(c.typeLine);
+    const ok = kinds.some((k) => {
+      switch (k.kind) {
+        case "partnerWith": return c.name.toLowerCase() === k.with!.toLowerCase();
+        case "partner": return theirs.includes("partner") && isCommanderCard(c, format);
+        case "friends": return theirs.includes("friends") && isCommanderCard(c, format);
+        case "background": return isBackground;
+        case "companion": return theirs.includes("doctor") && isCommanderCard(c, format);
+        case "doctor": return theirs.includes("companion") && isCommanderCard(c, format);
+      }
+    });
+    if (ok) out.set(c.name, c);
+  }
+  return [...out.values()].sort((a, b) => (a.edhrecRank ?? 1e9) - (b.edhrecRank ?? 1e9) || a.name.localeCompare(b.name));
+}
+
+export const PAIR_LABEL: Record<PairKind, string> = {
+  partner: "Partner", partnerWith: "Partner with", friends: "Friends forever", background: "Background", companion: "Doctor's companion", doctor: "Doctor",
+};
