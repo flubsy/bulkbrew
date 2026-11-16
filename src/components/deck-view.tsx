@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { db } from "@/lib/db";
 import { deckToCsv, deckToText, download } from "@/lib/export";
 import { BRACKETS, FORMATS, type BuiltDeck, type Color, type DeckEntry, type EdhrecCard, type Role } from "@/lib/types";
@@ -18,6 +18,24 @@ import { shareDeck, sharingAvailable, shareUrl } from "@/lib/share";
 import { OwnedSearch, ReEvaluatePanel, useDeckDraft, useReEvaluate } from "./deck-edit";
 import { GLYPH_CROSS, GLYPH_PLUS, Sprite } from "./sprites";
 import { usePrintings } from "./use-printings";
+import { useOwnership, type Ownership } from "./use-ownership";
+
+/** Card types in decklist order. Double-faced cards go by their front face; artifact/enchantment creatures are creatures. */
+const TYPE_ORDER = ["Creature", "Planeswalker", "Battle", "Instant", "Sorcery", "Artifact", "Enchantment", "Land", "Other"] as const;
+type TypeGroup = (typeof TYPE_ORDER)[number];
+const TYPE_LABEL: Record<TypeGroup, string> = { Creature: "Creatures", Planeswalker: "Planeswalkers", Battle: "Battles", Instant: "Instants", Sorcery: "Sorceries", Artifact: "Artifacts", Enchantment: "Enchantments", Land: "Lands", Other: "Other" };
+function typeOf(c: { typeLine: string }): TypeGroup {
+  const front = c.typeLine.split("//")[0];
+  return TYPE_ORDER.find((t) => t !== "Other" && new RegExp(`\\b${t}\\b`).test(front)) ?? "Other";
+}
+
+const OWN_STYLE: Record<string, { cls: string; label: (o: Ownership) => string; title: (o: Ownership) => string }> = {
+  free: { cls: "text-green", label: (o) => (o.spare ? `+${o.spare}` : "✓"), title: (o) => `You own ${o.owned}${o.spare ? `; ${o.spare} still free in your bulk after this deck` : ", all used here"}${o.savedIn.length ? `. Also in saved deck${o.savedIn.length === 1 ? "" : "s"}: ${o.savedIn.slice(0, 3).join(", ")}` : ""}.` },
+  shared: { cls: "text-gold", label: () => "shared", title: (o) => `You own ${o.owned}, already used in ${o.builtIn.join(", ")} (built). Move it between decks or pick up another copy.` },
+  missing: { cls: "text-red", label: () => "need", title: () => "Not in your collection." },
+};
+
+const GROUP_KEY = "deckbit.deckGroupBy";
 
 const ROLE_LABEL: Record<Role, string> = {
   commander: "Commander",
@@ -105,6 +123,17 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
   }
 
   const power = deck.cards.length ? currentPower(deck) : null;
+  const [groupBy, setGroupByState] = useState<"type" | "role">("type");
+  const [focusRole, setFocusRole] = useState<Role | null>(null);
+  useEffect(() => {
+    const t = setTimeout(() => { try { if (localStorage.getItem(GROUP_KEY) === "role") setGroupByState("role"); } catch { /* ignore */ } }, 0);
+    return () => clearTimeout(t);
+  }, []);
+  const setGroupBy = (g: "type" | "role") => { setGroupByState(g); try { localStorage.setItem(GROUP_KEY, g); } catch { /* ignore */ } };
+  const typeGroups = TYPE_ORDER.map((t) => ({ key: t, label: TYPE_LABEL[t], cards: listCards.filter((c) => typeOf(c) === t).sort((a, b) => a.cmc - b.cmc || a.name.localeCompare(b.name)) })).filter((g) => g.cards.length);
+  const shownGroups = groupBy === "type" ? typeGroups : groups.map((g) => ({ key: g.role, label: ROLE_LABEL[g.role], cards: g.cards }));
+  const own = useOwnership(deck, [...deck.commanders, ...listCards]);
+  const roleCounts = Object.entries(deck.stats.roles).filter(([r]) => r !== "land").sort((a, b) => b[1] - a[1]) as [Role, number][];
 
   return (
     <>
@@ -180,7 +209,16 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
         <Notice key={i} tone="warn">{w}</Notice>
       ))}
 
-      <Panel title="Decklist">
+      <Panel
+        title="Decklist"
+        aside={
+          <div className="flex items-center gap-1" role="group" aria-label="Group cards by">
+            <span className="mr-1 hidden text-[14px] text-muted sm:inline">group by</span>
+            <button type="button" className="px-chip px-border" aria-pressed={groupBy === "type"} onClick={() => setGroupBy("type")}>Type</button>
+            <button type="button" className="px-chip px-border" aria-pressed={groupBy === "role"} onClick={() => setGroupBy("role")}>Role</button>
+          </div>
+        }
+      >
         {editing && (
           <div className="mb-5 grid gap-4">
             <div className="px-border flex flex-wrap items-center gap-3 bg-navy-900 px-4 py-2 text-[17px]">
@@ -200,14 +238,26 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
             <p className="text-[15px] text-muted">Stats, power, combos and the primer update when you save.</p>
           </div>
         )}
-        {deck.commanders.length > 0 && <Group label="Commander" cards={deck.commanders} />}
-        {groups.map((g) => (
-          <Group key={g.role} label={ROLE_LABEL[g.role]} cards={g.cards} action={editing ? "remove" : undefined} />
-        ))}
-        <p className="mt-2 text-[14px] text-muted">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_260px]">
+          <div>
+            {focusRole && (
+              <p className="mb-3 text-[15px] text-cream-dim">
+                Highlighting <span className="text-orange">{ROLE_LABEL[focusRole]}</span> cards. <button type="button" className="text-orange underline" onClick={() => setFocusRole(null)}>clear</button>
+              </p>
+            )}
+            <div className="gap-6 md:columns-2">
+              {deck.commanders.length > 0 && <Group label="Commander" cards={deck.commanders} />}
+              {shownGroups.map((g) => (
+                <Group key={g.key} label={g.label} cards={g.cards} action={editing ? "remove" : undefined} />
+              ))}
+            </div>
+            <p className="mt-2 text-[14px] text-muted">
           Hover a card for the image; tap on mobile. <span className="inline-block h-2 w-2 bg-sea-light align-middle" /> = EDHREC pick, <span className="font-pixel text-[11px] text-gold">GC</span> = game changer, <span className="font-pixel text-[11px] text-orange">HOT</span> = new card already doing well with this commander, <span className="font-pixel text-[11px] text-sea-light">TREND</span> / <span className="font-pixel text-[11px] text-sea-light">NEW</span> = rising fast / recent printing on EDHREC.
           {!readOnly && <> Saved builds live under <a href="/saved" className="text-orange underline">Saved</a>; the .txt imports straight into Moxfield, Archidekt, MTGO and Arena.</>}
         </p>
+          </div>
+          <DeckSidebar />
+        </div>
       </Panel>
 
       {alternatives.length > 0 && (
@@ -285,43 +335,6 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
               <PowerMeter power={power} detail />
             </section>
           )}
-          <div className="grid gap-6 md:grid-cols-2">
-            <section>
-              <h3 className="font-pixel mb-2 text-[12px] text-orange">Mana curve</h3>
-              <div className="flex h-28 items-end gap-2">
-                {deck.stats.curve.map((n, i) => (
-                  <div key={i} className="flex flex-1 flex-col items-center gap-1">
-                    <span className="text-[14px] text-cream-dim">{n || ""}</span>
-                    <div className="px-bar w-full" style={{ height: `${Math.max(4, (n / maxCurve) * 80)}px` }} aria-label={`${n} cards at mana value ${i}`} />
-                    <span className="font-pixel text-[11px] text-muted">{i === 7 ? "7+" : i}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-            <section>
-              <h3 className="font-pixel mb-2 text-[12px] text-orange">Colour pips</h3>
-              <div className="flex h-6 w-full gap-[2px] overflow-hidden">
-                {(["W", "U", "B", "R", "G"] as Color[]).map((c) =>
-                  deck.stats.pips[c] ? (
-                    <div key={c} className="flex items-center justify-center gap-1 bg-navy-900 text-[13px] text-cream-dim" style={{ width: `${(deck.stats.pips[c] / pipTotal) * 100}%` }} title={`${c}: ${deck.stats.pips[c]}`}>
-                      <ManaSymbol sym={c} size={16} /> {deck.stats.pips[c]}
-                    </div>
-                  ) : null,
-                )}
-              </div>
-              <h3 className="font-pixel mb-2 mt-5 text-[12px] text-orange">Roles</h3>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[16px] text-cream-dim">
-                {Object.entries(deck.stats.roles)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([r, n]) => (
-                    <span key={r}>
-                      {ROLE_LABEL[r as Role] ?? r} <span className="text-cream">{n}</span>
-                    </span>
-                  ))}
-              </div>
-              {deck.stats.gameChangers.length > 0 && <p className="mt-3 text-[15px] text-gold">Game changers: {deck.stats.gameChangers.join(", ")}</p>}
-            </section>
-          </div>
           {noteSections(deck.notes).map((n) => (
             <section key={n.title}>
               <h3 className="font-pixel mb-2 text-[12px] text-orange">{n.title}</h3>
@@ -338,7 +351,7 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
 
   function Row({ c, action }: { c: DeckEntry; action?: "add" | "remove" }) {
     return (
-      <li className="flex items-center justify-between gap-2 px-2 py-1 text-[18px] hover:bg-navy-600" {...previewProps(preview, c.imageNormal ?? c.imageSmall, c.name)} tabIndex={0} title={`${c.reason}${c.edhrec ? " · EDHREC pick" : ""}`}>
+      <li className={`flex min-w-0 items-center justify-between gap-2 px-2 py-1 text-[18px] hover:bg-navy-600 ${focusRole && c.role !== focusRole ? "opacity-30" : ""}`} {...previewProps(preview, c.imageNormal ?? c.imageSmall, c.name)} tabIndex={0} title={`${c.reason}${c.edhrec ? " · EDHREC pick" : ""}`}>
         <span className="flex min-w-0 items-center gap-2">
           <span className="w-4 shrink-0 text-muted">{c.quantity}</span>
           {(c.edhrec || c.inAverageDeck) && <span className="h-2 w-2 shrink-0 bg-sea-light" aria-label="EDHREC pick" />}
@@ -349,6 +362,7 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
         <span className="flex shrink-0 items-center gap-2">
           <ManaCost cost={c.manaCost} size={16} />
           <span className="w-14 text-right text-[14px] text-muted">{fmt(c.priceUsd)}</span>
+          <OwnChip name={c.name} />
           {action && (
             <button
               type="button"
@@ -365,14 +379,79 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
     );
   }
 
+  function OwnChip({ name }: { name: string }) {
+    const o = own?.byName.get(name);
+    if (!o || o.status === "basic") return <span className="w-12" aria-hidden />;
+    const st = OWN_STYLE[o.status];
+    return <span className={`w-12 text-right text-[13px] ${st.cls}`} title={st.title(o)}>{st.label(o)}</span>;
+  }
+
+  function DeckSidebar() {
+    return (
+      <aside className="grid content-start gap-5 sm:grid-cols-2 xl:sticky xl:top-24 xl:grid-cols-1 xl:self-start">
+        <section>
+          <h3 className="font-pixel mb-2 text-[12px] text-orange">Mana curve</h3>
+          <div className="flex h-24 items-end gap-1">
+            {deck.stats.curve.map((n, i) => (
+              <div key={i} className="flex flex-1 flex-col items-center gap-1" title={`${n} card${n === 1 ? "" : "s"} at mana value ${i === 7 ? "7+" : i}`}>
+                <span className="text-[13px] text-cream-dim">{n || ""}</span>
+                <div className="px-bar w-full" style={{ height: `${Math.max(3, (n / maxCurve) * 60)}px` }} />
+                <span className="font-pixel text-[11px] text-muted">{i === 7 ? "7+" : i}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1 text-[14px] text-muted">Average mana value {deck.stats.avgCmc.toFixed(2)} (non-land)</p>
+        </section>
+        <section>
+          <h3 className="font-pixel mb-2 text-[12px] text-orange">Colour pips</h3>
+          <ul className="grid gap-1">
+            {(["W", "U", "B", "R", "G"] as Color[]).filter((c) => deck.stats.pips[c]).map((c) => (
+              <li key={c} className="flex items-center gap-2 text-[14px] text-cream-dim" title={`${deck.stats.pips[c]} ${c} pips`}>
+                <ManaSymbol sym={c} size={16} />
+                <span className="h-2 flex-1 bg-navy-900"><span className="px-bar block h-full" style={{ width: `${(deck.stats.pips[c] / pipTotal) * 100}%`, boxShadow: "none" }} /></span>
+                <span className="w-10 text-right">{Math.round((deck.stats.pips[c] / pipTotal) * 100)}%</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section>
+          <h3 className="font-pixel mb-2 text-[12px] text-orange">Roles</h3>
+          <ul className="grid gap-[2px]">
+            {roleCounts.map(([r, n]) => (
+              <li key={r}>
+                <button type="button" onClick={() => setFocusRole((x) => (x === r ? null : r))} aria-pressed={focusRole === r} className={`flex w-full justify-between px-2 py-[2px] text-left text-[15px] hover:bg-navy-600 ${focusRole === r ? "bg-navy-600 text-orange" : "text-cream-dim"}`} title="Highlight these cards in the list">
+                  <span>{ROLE_LABEL[r] ?? r}</span><span className="text-cream">{n}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {deck.stats.gameChangers.length > 0 && <p className="mt-2 text-[14px] text-gold">Game changers: {deck.stats.gameChangers.join(", ")}</p>}
+        </section>
+        {own && (
+          <section>
+            <h3 className="font-pixel mb-2 text-[12px] text-orange">From your collection</h3>
+            <ul className="grid gap-1 text-[15px]">
+              <li className="flex justify-between"><span className="text-green">From bulk</span><span className="text-cream">{own.summary.free}</span></li>
+              <li className="flex justify-between"><span className="text-gold">Shared with built decks</span><span className="text-cream">{own.summary.shared}</span></li>
+              <li className="flex justify-between"><span className="text-red">Not owned</span><span className="text-cream">{own.summary.missing}</span></li>
+            </ul>
+            <p className="mt-2 text-[13px] text-muted">
+              Basics not counted. <span className="text-green">+N</span> = copies still free in your bulk after this deck; <span className="text-gold">shared</span> = already in a deck marked built. Only decks marked built use up copies.
+            </p>
+          </section>
+        )}
+      </aside>
+    );
+  }
+
   function Group({ label, cards, action }: { label: string; cards: DeckEntry[]; action?: "add" | "remove" }) {
     const n = cards.reduce((s, c) => s + c.quantity, 0);
     return (
-      <div className="mb-5">
+      <div className="mb-5 break-inside-avoid">
         <h3 className="font-pixel mb-2 text-[13px] text-orange">
           {label} <span className="text-muted">{n}</span>
         </h3>
-        <ul className="grid gap-[2px] xl:grid-cols-2">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-[2px]">
           {cards.map((c) => (
             <Row key={c.name} c={c} action={action} />
           ))}
