@@ -6,6 +6,7 @@ import { ratePower } from "@/lib/builder/power";
 import { buildPrimer } from "@/lib/builder/primer";
 import { comboSuggestions, upgradeDeck, type UpgradeOptions } from "@/lib/builder/upgrade";
 import { edhrecContextFor } from "@/lib/edhrec-context";
+import { sampleDecks } from "@/lib/similar-decks";
 import { backfillPrices, fetchCollection, fetchNamed, normalizeCard } from "@/lib/scryfall";
 import { applyBracketEstimate, findCombos } from "@/lib/spellbook";
 import type { BuildOptions, CardData, ReferenceDeck } from "@/lib/types";
@@ -85,7 +86,12 @@ export async function POST(req: Request) {
     .filter((d): d is { card: CardData; quantity: number } => !!d.card && !cmdSet.has(d.card.name.toLowerCase()));
 
   const build: BuildOptions = { ...body.build, commander: commanders[0]?.name, partner: commanders[1]?.name };
-  const ed = await edhrecContextFor(build, { ci: [...new Set(commanders.flatMap((c) => c.colorIdentity))], commanderReleased: commanders[0]?.releasedAt });
+  const [edBase, samples] = await Promise.all([
+    edhrecContextFor(build, { ci: [...new Set(commanders.flatMap((c) => c.colorIdentity))], commanderReleased: commanders[0]?.releasedAt }),
+    commanders[0] && build.useEdhrec ? sampleDecks(commanders[0].name, commanders[1]?.name) : Promise.resolve(null),
+  ]);
+  // A copy: edhrecContextFor can return a shared empty object, which must never be modified.
+  const ed = samples?.decks.length ? { ...edBase, sampleDecks: samples.decks, sampleSources: samples.sources } : edBase;
   const pool = buildPool(body.owned ?? []);
 
   // Brackets 1–2 allow no two-card infinite combos: find the ones already in the list so the

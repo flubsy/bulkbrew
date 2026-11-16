@@ -5,6 +5,7 @@ import { buildHeuristic, buildPool, scorePool } from "@/lib/builder/heuristic";
 import { ratePower } from "@/lib/builder/power";
 import { buildPrimer } from "@/lib/builder/primer";
 import { edhrecContextFor } from "@/lib/edhrec-context";
+import { sampleDecks } from "@/lib/similar-decks";
 import { applyBracketEstimate, findCombos } from "@/lib/spellbook";
 import type { BuildOptions, CardData, ReferenceDeck } from "@/lib/types";
 
@@ -33,7 +34,13 @@ export async function POST(req: Request) {
 
   const cmdCards = [opts.commander, opts.partner].filter(Boolean).map((n) => pool.find((p) => p.card.name.toLowerCase() === n!.toLowerCase())?.card).filter((c) => !!c);
   const ci = cmdCards.length ? [...new Set(cmdCards.flatMap((c) => c!.colorIdentity))] : opts.colors;
-  const ed = await edhrecContextFor(opts, { ci, commanderReleased: cmdCards[0]?.releasedAt });
+  // EDHREC data and real decklists for "decks like yours", fetched side by side.
+  const [edBase, samples] = await Promise.all([
+    edhrecContextFor(opts, { ci, commanderReleased: cmdCards[0]?.releasedAt }),
+    opts.commander && opts.useEdhrec && opts.format === "commander" ? sampleDecks(opts.commander, opts.partner) : Promise.resolve(null),
+  ]);
+  // A copy: edhrecContextFor can return a shared empty object, which must never be modified.
+  const ed = samples?.decks.length ? { ...edBase, sampleDecks: samples.decks, sampleSources: samples.sources } : edBase;
   let deck = buildHeuristic(pool, opts, refs, ed);
   if (opts.useEdhrec && !ed.cards.length) deck.warnings.push("EDHREC returned nothing for this commander/theme (or was unreachable). Built without it.");
 
