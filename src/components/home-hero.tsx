@@ -4,14 +4,14 @@ import { useLiveQuery } from "dexie-react-hooks";
 import Link from "next/link";
 import { useRef, useState, type DragEvent } from "react";
 import { db } from "@/lib/db";
-import { BrewCanvas } from "./pixel/brew-canvas";
+import { ForgeCanvas } from "./pixel/forge-canvas";
 import { PixelNumber } from "./pixel/pixel-number";
 import { useCollectionImport } from "./use-collection-import";
 import { Notice, Progress } from "./ui";
 
 /**
- * The cauldron hero. New visitors: the brew IS the import — drop a CSV/XLSX anywhere on the
- * hero (or paste a list) and the brew surges while cards are matched. Returning players: their
+ * The Bit Forge hero. New visitors: the brew IS the import — drop a CSV/XLSX anywhere on the
+ * hero (or paste a list) and the forge roars while cards are matched. Returning players: their
  * own counters in monumental pixel numerals, and the brews they can start right now.
  */
 export function HomeHero() {
@@ -84,7 +84,7 @@ export function HomeHero() {
             <div className="mt-6">
               <div className={`px-border bg-navy-800 p-4 ${dragging ? "px-border-orange" : ""}`}>
                 <p className="font-pixel text-[15px] text-cream">
-                  {dragging ? "Let go to pour it in" : "Drop your collection into the cauldron"}
+                  {dragging ? "Let go to pour it in" : "Drop your collection into the forge"}
                 </p>
                 <p className="mt-1 text-[16px] text-cream-dim">
                   CSV or Excel from ManaBox, Moxfield, Archidekt, Deckbox, Dragon Shield or TCGplayer. Stays in your browser.
@@ -126,7 +126,7 @@ export function HomeHero() {
           )}
         </div>
 
-        <BrewCanvas flare={flare} className="order-1 lg:order-2" />
+        <ForgeCanvas flare={flare} className="order-1 lg:order-2" />
       </div>
     </section>
   );
