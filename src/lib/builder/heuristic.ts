@@ -1,5 +1,5 @@
 import { BASIC_LANDS, isBasic, manaPips } from "../scryfall";
-import { FORMATS, THEMES, type BuildOptions, type BuiltDeck, type CardData, type Color, type DeckEntry, type DeckProfile, type EdhrecCard, type ReferenceDeck, type Role, type TrendFlag } from "../types";
+import { THEMES, type BuildOptions, type BuiltDeck, type CardData, type Color, type DeckEntry, type DeckProfile, type EdhrecCard, type ReferenceDeck, type Role, type TrendFlag } from "../types";
 import { commanderHooks, creatureTypes, THEME_PATTERNS, FINISHER_LABEL, FINISHER_THEMES, finisherKind, type FinisherKind, isCreature, isExtraTurn, isFastMana, isGameChanger, isLand, isMassLandDenial, themeScore } from "./classify";
 import { needCounts, synergyWith, unmetNeed } from "./needs";
 import { similarFit } from "./similar";
@@ -93,9 +93,8 @@ const COLORS: Color[] = ["W", "U", "B", "R", "G"];
 /** Own at least this share of EDHREC's average deck and the build starts from it. */
 const TEMPLATE_SHARE = 0.4;
 
-export function formatMeta(f: BuildOptions["format"]) {
-  return FORMATS.find((x) => x.id === f)!;
-}
+export { formatMeta, quotas } from "./quotas";
+import { formatMeta, quotas } from "./quotas";
 
 /** Collapse owned printings into one pool entry per card name. */
 export function buildPool(owned: { card?: CardData; quantity: number; sets?: string[] }[]): PoolCard[] {
@@ -421,34 +420,6 @@ export function describe(c: Candidate, ed: EdhrecContext = EMPTY_EDHREC): string
   return bits.join(" · ");
 }
 
-/**
- * Role quotas per format. Commander numbers are for 99 cards. When EDHREC's average deck for the
- * commander is known (`profile`), its land count replaces the fixed one (it already reflects the tag).
- */
-export function quotas(format: BuildOptions["format"], themes: BuildOptions["themes"], profile?: DeckProfile): Partial<Record<Role, number>> & { land: number } {
-  const singleton = formatMeta(format).singleton;
-  if (singleton && formatMeta(format).size === 100) {
-    const q: Partial<Record<Role, number>> & { land: number } = { land: 36, ramp: 10, draw: 10, removal: 8, wipe: 2, counter: 0, protection: 2, tutor: 0, recursion: 1, finisher: 3 };
-    if (themes.includes("control")) { q.counter = 6; q.wipe = 4; q.draw = 12; }
-    if (themes.includes("landfall")) { q.land = 40; q.ramp = 8; }
-    if (themes.includes("aggro") || themes.includes("voltron")) { q.land = 34; q.wipe = 0; q.protection = 5; }
-    if (themes.includes("combo")) { q.tutor = 5; }
-    if (themes.includes("spellslinger")) { q.counter = 3; q.draw = 12; }
-    if (themes.includes("storm")) { q.draw = 12; q.ramp = 12; q.tutor = Math.max(q.tutor ?? 0, 2); }
-    if (themes.includes("superfriends")) { q.protection = 4; q.wipe = 3; }
-    if (themes.includes("monarch") || themes.includes("goad")) { q.protection = Math.max(q.protection ?? 0, 3); }
-    if (profile) q.land = Math.max(30, Math.min(42, Math.round(profile.lands)));
-    return q;
-  }
-  if (format === "oathbreaker") return { land: 21, ramp: 3, draw: 5, removal: 6, wipe: 1, counter: 0, finisher: 2 };
-  // 60-card
-  const q: Partial<Record<Role, number>> & { land: number } = { land: 23, ramp: 0, draw: 4, removal: 8, wipe: 1, counter: 0, finisher: 3 };
-  if (themes.includes("control")) { q.land = 25; q.counter = 8; q.wipe = 3; q.draw = 8; q.removal = 8; }
-  if (themes.includes("aggro") || themes.includes("burn")) { q.land = 20; q.draw = 2; q.wipe = 0; }
-  if (themes.includes("ramp")) { q.ramp = 8; q.land = 24; }
-  return q;
-}
-
 export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: ReferenceDeck[], ed: EdhrecContext = EMPTY_EDHREC): BuiltDeck {
   const edhrec = ed.cards;
   const meta = formatMeta(opts.format);
@@ -482,7 +453,7 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
   const target = meta.size - commanders.length;
   const maxCopies = meta.singleton ? 1 : 4;
   const profile = meta.size === 100 ? ed.profile : undefined;
-  const q = quotas(opts.format, opts.themes, profile);
+  const q = quotas(opts.format, opts.themes, profile, opts.composition);
   const bracket = opts.format === "commander" ? opts.bracket ?? 3 : 5;
   const gcCap = bracket <= 2 ? 0 : bracket === 3 ? 3 : 99;
 

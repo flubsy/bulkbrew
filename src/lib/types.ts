@@ -167,7 +167,13 @@ export interface BuildOptions {
   assumeBasics: boolean; // treat basic lands as unlimited
   preferCheap: boolean; // prefer cheaper cards when scores tie
   mustOwnEverything: boolean; // never suggest cards outside the collection (always true today)
+  /** Your own targets for lands and roles (sliders on the Build page); anything unset is automatic. */
+  composition?: Partial<Record<CompositionKey, number>>;
 }
+
+/** Deck parts with a slider on the Build page. */
+export const COMPOSITION_KEYS = ["land", "ramp", "draw", "removal", "wipe", "counter", "protection", "tutor", "recursion", "finisher"] as const;
+export type CompositionKey = (typeof COMPOSITION_KEYS)[number];
 
 export type Role =
   | "commander"
