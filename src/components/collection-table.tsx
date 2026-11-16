@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, memo, useMemo, useState, type ReactNode } from "react";
 import { removeRows, restoreRows, setQuantity, unitPrice, type CardGroup } from "@/lib/collection";
 import { comboName, type OwnedCard } from "@/lib/types";
 import { useCurrency } from "./currency-provider";
@@ -11,6 +11,7 @@ import { Button, ManaCost, Notice, Select } from "./ui";
 
 const PAGE_SIZES = [100, 400, 1000];
 const COLS = 8;
+const toggle = (set: Set<string>, key: string) => { const n = new Set(set); if (n.has(key)) n.delete(key); else n.add(key); return n; };
 
 /**
  * The collection, one row per card. A card owned in several printings expands to show each
@@ -23,7 +24,7 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showBasics, setShowBasics] = useState(false);
   const [removed, setRemoved] = useState<{ rows: OwnedCard[]; label: string } | null>(null);
-  const { fromUsd, code } = useCurrency();
+  const { code } = useCurrency();
 
   const [pageSize, setPageSize] = useState(400);
   const [pageWanted, setPage] = useState(0);
@@ -31,32 +32,43 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
   const page = Math.min(pageWanted, pages - 1); // filters can shrink the list under the current page
   const shown = groups.slice(page * pageSize, (page + 1) * pageSize);
   const onLastPage = page === pages - 1;
-  const visible = useMemo(() => [...shown, ...(showBasics ? basics : [])], [shown, basics, showBasics]);
+  const visible = [...shown, ...(showBasics ? basics : [])];
   const byKey = useMemo(() => new Map([...groups, ...basics].map((g) => [g.key, g])), [groups, basics]);
+  // Selected cards that still exist (a removed card simply drops out of the selection).
   const chosen = [...selected].map((k) => byKey.get(k)).filter((g): g is CardGroup => !!g);
   const chosenCards = chosen.reduce((s, g) => s + g.qty, 0);
   const allChosen = visible.length > 0 && visible.every((g) => selected.has(g.key));
 
-  const toggle = (set: Set<string>, key: string) => { const n = new Set(set); if (n.has(key)) n.delete(key); else n.add(key); return n; };
-  const price = (p: number | null) => (p != null ? fromUsd(p).toFixed(2) : "—");
-
-  async function remove(rows: OwnedCard[], label: string) {
-    await removeRows(rows);
-    setRemoved({ rows, label });
-    setSelected((s) => { const n = new Set(s); for (const g of [...byKey.values()]) if (g.rows.every((r) => rows.includes(r))) n.delete(g.key); return n; });
-  }
-
-  async function step(row: OwnedCard, delta: number) {
-    if (row.quantity + delta <= 0) return remove([row], `${row.name} (${(row.card?.setCode ?? row.setCode ?? "").toUpperCase()})`);
-    await setQuantity(row, row.quantity + delta);
-  }
+  // Only state setters and module functions inside, so this never changes and memoised rows
+  // re-render only when their own card does.
+  const actions = useMemo<RowActions>(() => {
+    const remove = async (rows: OwnedCard[], label: string) => {
+      await removeRows(rows);
+      setRemoved({ rows, label });
+    };
+    return {
+      toggleSelect: (key) => setSelected((s) => toggle(s, key)),
+      toggleOpen: (key) => setOpen((s) => toggle(s, key)),
+      togglePicking: (id) => setPicking((p) => (p === id ? null : id)),
+      closePicker: () => setPicking(null),
+      remove,
+      step: async (row, delta) => {
+        if (row.quantity + delta <= 0) return remove([row], `${row.name} (${(row.card?.setCode ?? row.setCode ?? "").toUpperCase()})`);
+        await setQuantity(row, row.quantity + delta);
+      },
+    };
+  }, []);
 
   async function removeSelected() {
     const rows = chosen.flatMap((g) => g.rows);
     if (!confirm(`Remove ${chosen.length} ${chosen.length === 1 ? "card" : "cards"} (${chosenCards} ${chosenCards === 1 ? "copy" : "copies"}) from your collection?`)) return;
-    await remove(rows, `${chosen.length} cards`);
+    await actions.remove(rows, `${chosen.length} cards`);
     setSelected(new Set());
   }
+
+  const rowsFor = (g: CardGroup) => (
+    <GroupRows key={g.key} g={g} selected={selected.has(g.key)} open={open.has(g.key)} picking={picking && g.rows.some((r) => r.id === picking) ? picking : null} actions={actions} />
+  );
 
   const basicCount = basics.reduce((s, g) => s + g.qty, 0);
 
@@ -70,7 +82,7 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
           </Notice>
         </div>
       )}
-      {selected.size > 0 && (
+      {chosen.length > 0 && (
         <div className="px-border mt-4 flex flex-wrap items-center gap-3 bg-navy-900 px-4 py-2 text-[17px]">
           <span className="text-cream">{chosen.length} selected · {chosenCards} {chosenCards === 1 ? "copy" : "copies"}</span>
           <Button size="sm" onClick={removeSelected}>Remove from collection</Button>
@@ -94,9 +106,7 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
             </tr>
           </thead>
           <tbody>
-            {shown.map((g) => (
-              <Fragment key={g.key}>{groupRows(g)}</Fragment>
-            ))}
+            {shown.map(rowsFor)}
             {onLastPage && basics.length > 0 && (
               <tr>
                 <td colSpan={COLS} className="!p-0">
@@ -109,7 +119,7 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
                 </td>
               </tr>
             )}
-            {onLastPage && showBasics && basics.map((g) => <Fragment key={g.key}>{groupRows(g)}</Fragment>)}
+            {onLastPage && showBasics && basics.map(rowsFor)}
           </tbody>
         </table>
         {groups.length > PAGE_SIZES[0] && (
@@ -133,22 +143,34 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
       </div>
     </>
   );
+}
 
-  function groupRows(g: CardGroup) {
-    const single = g.rows.length === 1 ? g.rows[0] : null;
-    const isOpen = open.has(g.key);
-    const c = g.card;
-    return (
+interface RowActions {
+  toggleSelect: (key: string) => void;
+  toggleOpen: (key: string) => void;
+  togglePicking: (rowId: string) => void;
+  closePicker: () => void;
+  remove: (rows: OwnedCard[], label: string) => Promise<void>;
+  step: (row: OwnedCard, delta: number) => Promise<void>;
+}
+
+/** One card's rows (its printings when expanded, and the printing picker). Memoised. */
+const GroupRows = memo(function GroupRows({ g, selected, open: isOpen, picking, actions }: { g: CardGroup; selected: boolean; open: boolean; picking: string | null; actions: RowActions }) {
+  const { fromUsd } = useCurrency();
+  const price = (p: number | null) => (p != null ? fromUsd(p).toFixed(2) : "—");
+  const single = g.rows.length === 1 ? g.rows[0] : null;
+  const c = g.card;
+  return (
       <Fragment>
         <tr>
           <td>
-            <input type="checkbox" className="h-4 w-4 accent-orange" checked={selected.has(g.key)} onChange={() => setSelected((s) => toggle(s, g.key))} aria-label={`Select ${g.name}`} />
+            <input type="checkbox" className="h-4 w-4 accent-orange" checked={selected} onChange={() => actions.toggleSelect(g.key)} aria-label={`Select ${g.name}`} />
           </td>
           <td>
             {single ? (
               <span className={c ? "" : "text-orange"}>{g.name}</span>
             ) : (
-              <button type="button" onClick={() => setOpen((s) => toggle(s, g.key))} aria-expanded={isOpen} className="inline-flex items-center gap-2 text-left hover:text-orange">
+              <button type="button" onClick={() => actions.toggleOpen(g.key)} aria-expanded={isOpen} className="inline-flex items-center gap-2 text-left hover:text-orange">
                 <Sprite grid={GLYPH_CHEVRON} scale={2} className={isOpen ? "rotate-90" : ""} />
                 {g.name}
               </button>
@@ -163,7 +185,7 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
             {single ? (
               printingCell(single)
             ) : (
-              <button type="button" onClick={() => setOpen((s) => toggle(s, g.key))} className="text-muted hover:text-orange">
+              <button type="button" onClick={() => actions.toggleOpen(g.key)} className="text-muted hover:text-orange">
                 {g.rows.length} printings
               </button>
             )}
@@ -175,7 +197,7 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
             {single ? qtyControls(single) : (
               <span className="inline-flex items-center gap-1">
                 <span className="min-w-[2ch] text-right text-cream">{g.qty}</span>
-                <IconButton glyph={GLYPH_CROSS} label={`Remove every ${g.name}`} onClick={() => remove(g.rows, `${g.qty} × ${g.name}`)} />
+                <IconButton glyph={GLYPH_CROSS} label={`Remove every ${g.name}`} onClick={() => actions.remove(g.rows, `${g.qty} × ${g.name}`)} />
               </span>
             )}
           </td>
@@ -198,7 +220,6 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
         ))}
       </Fragment>
     );
-  }
 
   function printingCell(row: OwnedCard) {
     const c = row.card;
@@ -208,7 +229,7 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
         {(c?.collectorNumber ?? row.collectorNumber) && <span className="text-muted">#{c?.collectorNumber ?? row.collectorNumber}</span>}
         {row.foil && <span className="font-pixel text-[8px] text-sea-light">FOIL</span>}
         {c?.fullArt && <span className="font-pixel text-[8px] text-gold">FULL ART</span>}
-        {c && <IconButton glyph={GLYPH_SWAP} label={`Change printing or finish of ${row.name}`} onClick={() => setPicking((p) => (p === row.id ? null : row.id))} pressed={picking === row.id} />}
+        {c && <IconButton glyph={GLYPH_SWAP} label={`Change printing or finish of ${row.name}`} onClick={() => actions.togglePicking(row.id)} pressed={picking === row.id} />}
       </span>
     );
   }
@@ -216,10 +237,10 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
   function qtyControls(row: OwnedCard) {
     return (
       <span className="inline-flex items-center gap-1">
-        <IconButton glyph={GLYPH_MINUS} label={row.quantity > 1 ? `One fewer ${row.name}` : `Remove ${row.name}`} onClick={() => step(row, -1)} />
+        <IconButton glyph={GLYPH_MINUS} label={row.quantity > 1 ? `One fewer ${row.name}` : `Remove ${row.name}`} onClick={() => actions.step(row, -1)} />
         <span className="min-w-[2ch] text-center text-cream">{row.quantity}</span>
-        <IconButton glyph={GLYPH_PLUS} label={`One more ${row.name}`} onClick={() => step(row, 1)} />
-        <IconButton glyph={GLYPH_CROSS} label={`Remove ${row.name}`} onClick={() => remove([row], row.quantity > 1 ? `${row.quantity} × ${row.name}` : row.name)} />
+        <IconButton glyph={GLYPH_PLUS} label={`One more ${row.name}`} onClick={() => actions.step(row, 1)} />
+        <IconButton glyph={GLYPH_CROSS} label={`Remove ${row.name}`} onClick={() => actions.remove([row], row.quantity > 1 ? `${row.quantity} × ${row.name}` : row.name)} />
       </span>
     );
   }
@@ -228,12 +249,12 @@ export function CollectionTable({ groups, basics }: { groups: CardGroup[]; basic
     return (
       <tr className="hover:!bg-transparent">
         <td colSpan={COLS} className="bg-navy-900">
-          <PrintingPicker row={row} onDone={() => setPicking(null)} />
+          <PrintingPicker row={row} onDone={actions.closePicker} />
         </td>
       </tr>
     );
   }
-}
+});
 
 function IconButton({ glyph, label, onClick, pressed }: { glyph: string[]; label: string; onClick: () => void; pressed?: boolean }): ReactNode {
   return (

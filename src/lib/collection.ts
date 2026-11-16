@@ -104,3 +104,47 @@ export async function movePrinting(row: OwnedCard, card: CardData, foil: boolean
     else await db.owned.update(row.id, { quantity: row.quantity - n });
   });
 }
+
+/**
+ * Price rows whose printing has no Scryfall price (often non-English cards) from the cheapest
+ * priced printing of the same card, 300 cards per /api/prices call. Runs once after an import
+ * (instead of a few searches inside every 75-card lookup) and from the Collection page's button.
+ */
+export async function priceMissing(onProgress?: (fixed: number, total: number) => void): Promise<{ fixed: number; total: number }> {
+  const rows = (await db.owned.toArray()).filter((c) => c.card && c.card.priceUsd == null && c.card.oracleId && !isBasicLand(c.card));
+  const ids = [...new Set(rows.map((r) => r.card!.oracleId))];
+  let fixed = 0;
+  onProgress?.(0, rows.length);
+  for (let i = 0; i < ids.length; i += 300) {
+    const res = await fetch("/api/prices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ oracleIds: ids.slice(i, i + 300) }) });
+    if (!res.ok) throw new Error(`prices ${res.status}`);
+    const { prices } = (await res.json()) as { prices?: Record<string, number> };
+    const updates = rows.filter((r) => prices?.[r.card!.oracleId] != null).map((r) => ({ ...r, card: { ...r.card!, priceUsd: prices![r.card!.oracleId] } }));
+    if (updates.length) await db.owned.bulkPut(updates);
+    fixed += updates.length;
+    onProgress?.(fixed, rows.length);
+  }
+  return { fixed, total: rows.length };
+}
+
+/**
+ * Group objects that survive Dexie re-queries. A live query hands back fresh row objects after
+ * every change, so without this a +1 on one card makes every group (and every table row) look
+ * new. A group whose rows didn't change keeps its old object, so memoised rows skip re-rendering.
+ */
+const groupCache = new Map<string, { sig: string; g: CardGroup }>();
+const rowSig = (r: OwnedCard) => `${r.id}:${r.quantity}:${r.foil ? 1 : 0}:${r.card?.scryfallId ?? ""}:${r.card?.priceUsd ?? ""}:${r.card?.priceUsdFoil ?? ""}:${r.enrichError ?? ""}`;
+export function stableGroups(rows: OwnedCard[]): CardGroup[] {
+  const out = groupOwned(rows).map((g) => {
+    const sig = `${g.name}|${g.rows.map(rowSig).join("|")}`;
+    const hit = groupCache.get(g.key);
+    if (hit && hit.sig === sig) return hit.g;
+    groupCache.set(g.key, { sig, g });
+    return g;
+  });
+  if (groupCache.size > out.length * 2 + 100) { // forget groups that were removed
+    const live = new Set(out.map((g) => g.key));
+    for (const k of groupCache.keys()) if (!live.has(k)) groupCache.delete(k);
+  }
+  return out;
+}

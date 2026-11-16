@@ -11,13 +11,12 @@ import { PowerMeter } from "./power-meter";
 import { currentPower } from "@/lib/builder/power";
 import { Button, Panel } from "./ui";
 import { useCurrency } from "./currency-provider";
-import { usePrintings } from "./use-printings";
+import { printingsNow } from "./use-printings";
 
 export function SavedDecks() {
   const builds = useLiveQuery(() => db.builds.orderBy("createdAt").reverse().toArray(), []);
   const [open, setOpen] = useState<BuiltDeck | null>(null);
   const { fmt } = useCurrency();
-  const { lookup } = usePrintings();
 
   if (open) {
     return (
@@ -65,8 +64,8 @@ export function SavedDecks() {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1">
                   <Button size="sm" onClick={() => setOpen(b)}>open</Button>
-                  <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText(deckToText(b, lookup))}>copy</Button>
-                  <Button size="sm" variant="ghost" onClick={() => download(`${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.txt`, deckToText(b, lookup))}>.txt</Button>
+                  <Button size="sm" variant="ghost" onClick={async () => navigator.clipboard.writeText(deckToText(b, await printingsNow()))}>copy</Button>
+                  <Button size="sm" variant="ghost" onClick={async () => download(`${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.txt`, deckToText(b, await printingsNow()))}>.txt</Button>
                   <a href={`/saved/compare?a=${encodeURIComponent(b.id)}`} className="px-btn px-btn-ghost px-btn-sm inline-block">compare</a>
                   <Button size="sm" variant="ghost" aria-pressed={!!b.inUse} onClick={() => db.builds.update(b.id, { inUse: !b.inUse || undefined })} title="Mark decks you've actually put together, so Build and Upgrade can keep their cards out">{b.inUse ? "✓ built" : "mark built"}</Button>
                   <Button size="sm" variant="ghost" onClick={() => { if (confirm(`Delete "${title}"?`)) db.builds.delete(b.id); }}>delete</Button>

@@ -1,56 +1,23 @@
 "use client";
 
 import { createClient, type Provider, type SupabaseClient } from "@supabase/supabase-js";
+import { accountsConfigured, AUTH_STORAGE_KEY, CLIENT_EVENT, MIN_PASSWORD, SUPABASE_KEY, SUPABASE_URL, USERNAME_RE } from "./supabase-config";
 
-/**
- * Accounts are optional. Without NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY the app
- * runs exactly as before (data on this device only) and the account UI explains how to enable it.
- * The anon key is safe to expose: Row Level Security (supabase/schema.sql) limits every user to
- * their own rows.
- */
-
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-// The Vercel integration sets the anon key; newer Supabase projects and templates call it the
-// "publishable" key under a few names. Each must be written out in full so Next inlines it at build.
-const KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY;
-
-export const accountsConfigured = !!(URL && KEY);
-
-/** Which of the two settings this build is missing (names only, for the Account page). */
-export const missingAccountEnv = [
-  !URL && "NEXT_PUBLIC_SUPABASE_URL",
-  !KEY && "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-].filter(Boolean) as string[];
-
-/** Which sign-in buttons to show. Each must also be enabled in Supabase → Authentication → Providers. */
-export const AUTH_PROVIDERS = (process.env.NEXT_PUBLIC_AUTH_PROVIDERS ?? "google,email")
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
+export { accountsConfigured, AUTH_PROVIDERS, MIN_PASSWORD, missingAccountEnv, PROVIDER_LABEL, USERNAME_RE } from "./supabase-config";
 
 let client: SupabaseClient | null = null;
 
 export function supabase(): SupabaseClient | null {
   if (!accountsConfigured) return null;
   if (!client) {
-    client = createClient(URL!, KEY!, {
-      auth: { flowType: "pkce", persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: "deckbit.auth" },
+    client = createClient(SUPABASE_URL!, SUPABASE_KEY!, {
+      auth: { flowType: "pkce", persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: AUTH_STORAGE_KEY },
     });
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(CLIENT_EVENT));
   }
   return client;
 }
 
-export const PROVIDER_LABEL: Record<string, string> = {
-  google: "Google",
-  apple: "Apple",
-  discord: "Discord",
-  github: "GitHub",
-  email: "email",
-};
 
 export async function signInWith(provider: Provider) {
   const sb = supabase();
@@ -62,8 +29,6 @@ export async function signInWith(provider: Provider) {
 
 /* ----------------------------- username + password accounts ----------------------------- */
 
-export const USERNAME_RE = /^[A-Za-z0-9_.-]{3,24}$/;
-export const MIN_PASSWORD = 8;
 
 /** Turn Supabase's error wording into something a player can act on. */
 function friendly(e: { message: string }): Error {

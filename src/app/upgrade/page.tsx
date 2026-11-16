@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import { DeckUpgrader } from "@/components/deck-upgrader";
 import { ANVIL, Sprite } from "@/components/sprites";
 
-export const metadata: Metadata = { title: "Upgrade" };
+export const metadata: Metadata = {
+  title: "Upgrade or downgrade a Commander deck",
+  description: "Paste a decklist and Deckbit suggests swaps from your own collection to push it up (or down) a bracket, with the reason for every change.",
+  alternates: { canonical: "/upgrade" },
+};
 
 export default function UpgradePage() {
   return (

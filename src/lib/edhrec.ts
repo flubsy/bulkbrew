@@ -31,7 +31,8 @@ export const COLOR_SLUG: Record<string, string> = {
 async function getPage<T>(p: string): Promise<T | null> {
   return cached<T>(`edhrec:${p}`, DAY, async () => {
     try {
-      const res = await fetch(`https://json.edhrec.com/pages/${p}.json`, { headers: { "User-Agent": UA, Accept: "application/json" } });
+      // A timeout so one slow EDHREC response can't stall a whole build (a miss just means less data).
+      const res = await fetch(`https://json.edhrec.com/pages/${p}.json`, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
       if (!res.ok) return null;
       return (await res.json()) as T;
     } catch {
@@ -104,23 +105,25 @@ function commanderBase(commander: string, partner?: string) {
   return partner ? `${edhrecSlug(commander)}-${edhrecSlug(partner)}` : edhrecSlug(commander);
 }
 
-async function averageDeck(base: string, tag?: string, bracket?: number): Promise<string[]> {
-  type Avg = { deck?: { cards?: Record<string, [string, number][]> } };
-  // A themed average when there is a tag; otherwise the one for the bracket (EDHREC has one per bracket).
-  const slug = bracket ? BRACKET_SLUG[bracket] : undefined;
-  const page = (tag ? await getPage<Avg>(`average-decks/${base}/${tag}`) : null) ?? (!tag && slug ? await getPage<Avg>(`average-decks/${base}/${slug}`) : null) ?? (await getPage<Avg>(`average-decks/${base}`));
-  const groups = page?.deck?.cards ?? {};
-  return Object.values(groups).flatMap((g) => g.map(([n]) => n));
-}
+type Avg = { deck?: { cards?: Record<string, [string, number][]> } };
+const avgNames = (page: Avg | null) => Object.values(page?.deck?.cards ?? {}).flatMap((g) => g.map(([n]) => n));
 
 /** Everything EDHREC knows about a commander, optionally narrowed to one of its tags (e.g. "dragons"). */
 export async function edhrecCommander(commander: string, partner?: string, tag?: string, bracket?: number): Promise<CommanderInfo | null> {
   const base = commanderBase(commander, partner);
-  const plain = await getPage<CommanderJson>(`commanders/${base}`);
+  const slug = bracket ? BRACKET_SLUG[bracket] : undefined;
+  // Every page this can need, fetched at once rather than one after another (each is cached a day).
+  // The average deck: the themed one when the tag has cards, else the bracket's, else the plain one.
+  const [plain, themed, avgTag, avgBracket] = await Promise.all([
+    getPage<CommanderJson>(`commanders/${base}`),
+    tag ? getPage<CommanderJson>(`commanders/${base}/${tag}`) : null,
+    tag ? getPage<Avg>(`average-decks/${base}/${tag}`) : null,
+    slug ? getPage<Avg>(`average-decks/${base}/${slug}`) : null,
+  ]);
   if (!plain) return null;
-  const themed = tag ? await getPage<CommanderJson>(`commanders/${base}/${tag}`) : null;
   const card = plain.container?.json_dict?.card;
   const themedCards = flatten(themed);
+  const avg = (themedCards.length ? avgTag : null) ?? avgBracket ?? (await getPage<Avg>(`average-decks/${base}`));
   return {
     name: card?.name ?? commander,
     slug: base,
@@ -129,7 +132,7 @@ export async function edhrecCommander(commander: string, partner?: string, tag?:
     salt: card?.salt ?? null,
     tags: (plain.panels?.taglinks ?? []).map((t) => ({ slug: t.slug, label: t.value, decks: t.count })),
     cards: themedCards.length ? themedCards : flatten(plain),
-    averageDeck: await averageDeck(base, themedCards.length ? tag : undefined, bracket),
+    averageDeck: avgNames(avg),
     profile: (themedCards.length ? profileOf(themed) : undefined) ?? profileOf(plain),
     tagUsed: themedCards.length ? tag : undefined,
   };

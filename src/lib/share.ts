@@ -1,6 +1,6 @@
 "use client";
 
-import { supabase } from "./supabase";
+import { accountsConfigured, loadSupabase } from "./supabase-config";
 import type { BuiltDeck } from "./types";
 
 /**
@@ -8,7 +8,7 @@ import type { BuiltDeck } from "./types";
  * two functions; works signed in or not. Signed-in owners re-sharing a deck update the same link.
  */
 
-export const sharingAvailable = () => !!supabase();
+export const sharingAvailable = () => accountsConfigured;
 
 /** What goes public: the list, stats, primer, combos and upgrade notes. Not your bench (that's your collection) or private lists. */
 function publicCopy(deck: BuiltDeck): BuiltDeck {
@@ -22,7 +22,7 @@ function publicCopy(deck: BuiltDeck): BuiltDeck {
 }
 
 export async function shareDeck(deck: BuiltDeck): Promise<string> {
-  const sb = supabase();
+  const sb = await loadSupabase();
   if (!sb) throw new Error("Sharing needs accounts set up on this server.");
   const { data, error } = await sb.rpc("share_deck", { p_data: publicCopy(deck), p_id: deck.shareId ?? null });
   if (error) throw new Error(/function .* does not exist|schema cache/i.test(error.message) ? "Sharing isn't switched on yet: run supabase/schema.sql again in Supabase." : error.message);
@@ -30,7 +30,7 @@ export async function shareDeck(deck: BuiltDeck): Promise<string> {
 }
 
 export async function loadSharedDeck(id: string): Promise<BuiltDeck | null> {
-  const sb = supabase();
+  const sb = await loadSupabase();
   if (!sb) throw new Error("Sharing isn't set up on this server.");
   const { data, error } = await sb.rpc("get_shared_deck", { p_id: id });
   if (error) throw new Error(error.message);

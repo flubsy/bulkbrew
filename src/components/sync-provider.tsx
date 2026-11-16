@@ -2,7 +2,7 @@
 
 import type { Session } from "@supabase/supabase-js";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { accountsConfigured, supabase } from "@/lib/supabase";
+import { accountsConfigured, authPending, CLIENT_EVENT, loadSupabase } from "@/lib/supabase-config";
 import { hasLocalData, lastSync, linkDevice, linkedUser, pendingCount, syncNow } from "@/lib/sync";
 
 export interface AccountUser {
@@ -45,6 +45,7 @@ function toUser(s: Session | null): AccountUser | null {
 
 export function SyncProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AccountUser | null>(null);
+  // Ready straight away unless there's a session to restore: signed-out visitors never load Supabase.
   const [ready, setReady] = useState(!accountsConfigured);
   const [status, setStatus] = useState<SyncState["status"]>("idle");
   const [error, setError] = useState<string>();
@@ -56,8 +57,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const refreshPending = useCallback(async () => setPending(await pendingCount()), []);
 
   const sync = useCallback(async () => {
-    const sb = supabase();
-    if (!sb || !user || needsLink) return;
+    if (!user || needsLink) return;
+    const sb = await loadSupabase();
+    if (!sb) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
     setStatus("syncing");
     try {
@@ -72,14 +74,29 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     await refreshPending();
   }, [user, needsLink, refreshPending]);
 
-  // Auth state.
+  // Auth state. The Supabase library (~57 KB gzipped) loads only when there's a saved session or
+  // a sign-in redirect to finish, or once another part of the app (the Account page, sharing)
+  // creates the client; then we attach to it.
   useEffect(() => {
-    const sb = supabase();
-    if (!sb) return;
+    if (!accountsConfigured) return;
     let alive = true;
-    sb.auth.getSession().then(({ data }) => { if (alive) { setUser(toUser(data.session)); setReady(true); } });
-    const { data: sub } = sb.auth.onAuthStateChange((_e, session) => setUser(toUser(session)));
-    return () => { alive = false; sub.subscription.unsubscribe(); };
+    let unsub: (() => void) | undefined;
+    let started = false;
+    const attach = async () => {
+      if (started) return;
+      started = true;
+      const sb = await loadSupabase();
+      if (!sb || !alive) return;
+      const { data: sub } = sb.auth.onAuthStateChange((_e, session) => setUser(toUser(session)));
+      unsub = () => sub.subscription.unsubscribe();
+      const { data } = await sb.auth.getSession();
+      if (alive) { setUser(toUser(data.session)); setReady(true); }
+    };
+    const onClient = () => void attach();
+    window.addEventListener(CLIENT_EVENT, onClient);
+    if (authPending()) void attach();
+    else setTimeout(() => { if (alive) setReady(true); }, 0);
+    return () => { alive = false; unsub?.(); window.removeEventListener(CLIENT_EVENT, onClient); };
   }, []);
 
   // On sign-in: link this device, then sync.
@@ -131,7 +148,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const signOut = useCallback(async () => {
-    await supabase()?.auth.signOut();
+    await (await loadSupabase())?.auth.signOut();
     setUser(null);
     setStatus("idle");
   }, []);

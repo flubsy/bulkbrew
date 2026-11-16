@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import { CommanderRoller } from "@/components/commander-roller";
 import { DIE, Sprite } from "@/components/sprites";
 
-export const metadata: Metadata = { title: "Roll" };
+export const metadata: Metadata = {
+  title: "Roll a random commander",
+  description: "Roll a random commander you can build from your collection, and get a full deck for it in one click.",
+  alternates: { canonical: "/roll" },
+};
 
 export default function RollPage() {
   return (

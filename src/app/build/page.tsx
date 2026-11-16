@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { DeckBuilder } from "@/components/deck-builder";
 
-export const metadata: Metadata = { title: "Build" };
+export const metadata: Metadata = {
+  title: "Build a Commander deck from your collection",
+  description: "Pick a commander, theme, bracket and budget: Deckbit builds the strongest 100-card Commander deck from the cards you own, scored against EDHREC and Commander Spellbook.",
+  alternates: { canonical: "/build" },
+};
 
 export default function BuildPage() {
   return (

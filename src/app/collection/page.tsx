@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { CollectionManager } from "@/components/collection-manager";
 
-export const metadata: Metadata = { title: "Collection" };
+export const metadata: Metadata = {
+  title: "Import your Magic collection",
+  description: "Import a CSV or Excel export from ManaBox, Moxfield, Archidekt, Deckbox, Dragon Shield or TCGplayer. Your collection stays in your browser.",
+  alternates: { canonical: "/collection" },
+};
 
 export default function CollectionPage() {
   return (

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SavedTabs } from "@/components/nav";
 import { SavedDecks } from "@/components/saved-decks";
 
-export const metadata: Metadata = { title: "Saved" };
+export const metadata: Metadata = { title: "Saved", robots: { index: false, follow: false } };
 
 export default function SavedPage() {
   return (

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SavedTabs } from "@/components/nav";
 import { Wishlist } from "@/components/wishlist";
 
-export const metadata: Metadata = { title: "Wishlist" };
+export const metadata: Metadata = { title: "Wishlist", robots: { index: false, follow: false } };
 
 export default function WishlistPage() {
   return (

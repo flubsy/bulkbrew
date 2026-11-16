@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { DeckCompare } from "@/components/deck-compare";
 import { SavedTabs } from "@/components/nav";
 
-export const metadata: Metadata = { title: "Compare decks" };
+export const metadata: Metadata = { title: "Compare decks", robots: { index: false, follow: false } };
 
 export default function ComparePage() {
   return (
