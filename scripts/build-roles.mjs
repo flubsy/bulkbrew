@@ -2,7 +2,9 @@
 // These are hand-curated function tags (ramp, removal, draw, …) and are far more accurate
 // than regexes over oracle text. Run occasionally:  npm run roles
 //
-// Respects Scryfall's API guidance: descriptive User-Agent, Accept header, ~8 req/s.
+// Respects Scryfall's API guidance: descriptive User-Agent, Accept header, and the search
+// endpoint's tighter limit (2 requests a second): one request every 600 ms, backing off on 429.
+// Takes a few minutes.
 
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -56,14 +58,27 @@ const EXTRA = {
 const HEADERS = { "User-Agent": "Deckbit/0.1 (collection deck builder; role table build)", Accept: "application/json" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function getJson(url, tries = 4) {
+const GAP = 600; // ms between requests: under Scryfall's 2/s limit for /cards/search
+let last = 0;
+
+/** One Scryfall request, paced, retrying 429s with a growing wait (or Retry-After). null on 404. */
+async function getJson(url, tries = 8) {
   for (let i = 0; i < tries; i++) {
+    const wait = last + GAP - Date.now();
+    if (wait > 0) await sleep(wait);
+    last = Date.now();
     const res = await fetch(url, { headers: HEADERS });
-    if (res.status === 429) { await sleep(2000 * (i + 1)); continue; }
+    if (res.status === 404) return null;
+    if (res.status === 429) {
+      const after = Number(res.headers.get("retry-after")) * 1000 || 5000 * (i + 1);
+      console.log(`  (rate limited, waiting ${Math.round(after / 1000)}s)`);
+      await sleep(after);
+      continue;
+    }
     if (!res.ok) throw new Error(`${res.status} ${url}`);
     return res.json();
   }
-  throw new Error(`rate limited: ${url}`);
+  throw new Error(`still rate limited after ${tries} tries: ${url}`);
 }
 
 const out = { generatedAt: new Date().toISOString(), source: "Scryfall Tagger oracle tags (otag:)", roles: {} };
@@ -74,10 +89,10 @@ for (const [role, tag] of Object.entries(TAGS)) {
   let pages = 0;
   while (url) {
     const page = await getJson(url);
+    if (!page) break;
     for (const c of page.data) names.add(c.name);
     url = page.has_more ? page.next_page : null;
     pages++;
-    await sleep(120);
   }
   out.roles[role] = [...names].sort();
   console.log(`${role.padEnd(11)} otag:${tag.padEnd(13)} ${String(names.size).padStart(5)} cards (${pages} pages)`);
@@ -93,14 +108,10 @@ async function tagNames(tag) {
   const names = new Set();
   let url = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(`otag:${tag} game:paper`)}&unique=cards&order=name`;
   while (url) {
-    const res = await fetch(url, { headers: HEADERS });
-    if (res.status === 404) return names;
-    if (res.status === 429) { await sleep(2000); continue; }
-    if (!res.ok) throw new Error(`${res.status} ${url}`);
-    const page = await res.json();
+    const page = await getJson(url);
+    if (!page) return names;
     for (const c of page.data) names.add(c.name);
     url = page.has_more ? page.next_page : null;
-    await sleep(120);
   }
   return names;
 }
