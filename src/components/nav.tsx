@@ -7,7 +7,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { AccountButton } from "./account-button";
 import { CurrencyPicker } from "./currency-provider";
-import { ICON_ANVIL, ICON_CARDS, ICON_CAULDRON, ICON_CHEST, ICON_DIE, ICON_HOME, ICON_SWORD, Sprite } from "./sprites";
+import { ICON_ANVIL, ICON_CARDS, ICON_BIT, ICON_CHEST, ICON_DIE, ICON_HOME, ICON_SWORD, Sprite } from "./sprites";
 
 type Tab = { href: string; label: string; short: string; icon: string[]; match?: string[] };
 
@@ -96,7 +96,7 @@ export function Nav() {
       <header className="sticky top-0 z-40 border-b-4 border-navy-600 bg-navy-800">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <Link href="/" className="flex items-center gap-3">
-            <Sprite grid={ICON_CAULDRON} scale={3} />
+            <Sprite grid={ICON_BIT} scale={3} />
             <span className="font-wordmark text-[12px] text-cream">
               Deck<span className="text-orange">bit</span>
             </span>

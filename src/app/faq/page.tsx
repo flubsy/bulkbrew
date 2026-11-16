@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ICON_CAULDRON, Sprite } from "@/components/sprites";
+import { ICON_BIT, Sprite } from "@/components/sprites";
 
 export const metadata: Metadata = {
   title: "How it works",
@@ -47,7 +47,7 @@ export default function FaqPage() {
     <div className="py-8">
       <div className="flex items-end gap-4">
         <h1 className="font-pixel text-[26px] text-cream">How Deckbit works</h1>
-        <Sprite grid={ICON_CAULDRON} scale={4} className="mb-1" />
+        <Sprite grid={ICON_BIT} scale={4} className="mb-1" />
       </div>
       <p className="mt-3 max-w-[68ch] text-[19px] text-cream-dim">
         Everything Deckbit decides comes from public data and fixed rules, not guesswork and not AI. Here&apos;s exactly how, so you can argue with it.

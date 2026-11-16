@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { HomeHero } from "@/components/home-hero";
-import { ARROW, BINDER, DECK_BOX, ICON_ANVIL, ICON_CAULDRON, ICON_CHEST, ICON_DIE, Sprite, TOME } from "@/components/sprites";
+import { ARROW, BINDER, DECK_BOX, ICON_ANVIL, ICON_BIT, ICON_CHEST, ICON_DIE, Sprite, TOME } from "@/components/sprites";
 
 const PATH = [
   { n: "1", title: "Bulk", sprite: BINDER, body: "Import the cards you own from a CSV, an Excel sheet or a pasted list. Each one is matched on Scryfall for its rules text, legality and price." },
-  { n: "2", title: "Brew", sprite: ICON_CAULDRON, body: "Pick a commander, a theme, a bracket and a budget. Every card you own is scored against EDHREC and the decks people actually play." },
+  { n: "2", title: "Forge", sprite: ICON_BIT, body: "Pick a commander, a theme, a bracket and a budget. Every card you own is scored against EDHREC and the decks people actually play." },
   { n: "3", title: "Deck", sprite: DECK_BOX, body: "Out comes a full 100: ramp, draw, removal and a mana base, with the reason each card made it and a bench of swaps you already own." },
 ];
 

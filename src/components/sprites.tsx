@@ -340,22 +340,22 @@ export const TENTACLE = [
   "ssss....",
 ];
 
-/** Cauldron mark (11×11): Deckbit's logo glyph, nav and favicon companion. */
-export const ICON_CAULDRON = [
-  "...y...y...",
-  "....y.y....",
-  ".#########.",
-  "#mwoooooOO#",
-  ".#lllllll#.",
-  ".#mlllllk#.",
-  ".#mllllkk#.",
-  "..#lllkk#..",
-  "...#####...",
-  "..o.oyo.o..",
-  "...ooyoo...",
+/** Bit (11×11), the little brass forge-bot: Deckbit's logo glyph, nav and favicon companion. */
+export const ICON_BIT = [
+  ".....y.....",
+  ".....#.....",
+  "###########",
+  "#wwwwwwwwo#",
+  "#wkkkkkkoO#",
+  "#wkkkkyyoO#",
+  "#wkkkkkkoO#",
+  "#woooooooO#",
+  "#OOOOOOOOO#",
+  "###########",
+  ".##.....##.",
 ];
 
-/** A sleeved deck box (10×12), the thing that rises out of the brew. */
+/** A sleeved deck box (10×12), the thing Bit forges. */
 export const DECK_BOX = [
   ".########.",
   "#wwwwwwwo#",

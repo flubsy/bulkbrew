@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { createBrewScene, FOCUS_X, SCENE_H, SCENE_W } from "./brew-scene";
+import { createForgeScene, FOCUS_X, SCENE_H, SCENE_W } from "./forge-scene";
 
 /**
- * Runs the brew scene at the art's own 10 fps and blows it up at the largest integer scale that
+ * Runs the Bit Forge scene at the art's own 10 fps and blows it up at the largest integer scale that
  * fits (never fractional, so every art pixel stays square). Narrow screens crop around the
- * cauldron instead of shrinking. Pauses off-screen and in background tabs; reduced motion gets
- * one still frame. `flare` makes the brew surge (used while a collection is dropped in).
+ * anvil instead of shrinking. Pauses off-screen and in background tabs; reduced motion gets
+ * one still frame. `flare` makes the forge roar (used while a collection is dropped in).
  */
-export function BrewCanvas({ flare = false, className = "" }: { flare?: boolean; className?: string }) {
+export function ForgeCanvas({ flare = false, className = "" }: { flare?: boolean; className?: string }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const flareRef = useRef(flare);
@@ -24,7 +24,7 @@ export function BrewCanvas({ flare = false, className = "" }: { flare?: boolean;
     if (!el || !cv) return;
     const ctx = cv.getContext("2d");
     if (!ctx) return;
-    const scene = createBrewScene();
+    const scene = createForgeScene();
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let k = 3, sx = 0, vw = SCENE_W;
     let frame = 14; // a frame with cards mid-air, used as the still for reduced motion
@@ -66,7 +66,7 @@ export function BrewCanvas({ flare = false, className = "" }: { flare?: boolean;
       <canvas
         ref={canvas}
         role="img"
-        aria-label="Pixel-art castle courtyard at night: cards fly out of an open binder into a bubbling cauldron over a fire, and a finished deck box floats up out of the brew."
+        aria-label="Pixel-art castle courtyard at night: Bit, a little brass robot, hammers cards flying out of an open binder into a deck on an anvil beside a roaring forge, while a counter ticks toward 100."
         style={{ imageRendering: "pixelated" }}
       />
     </div>
