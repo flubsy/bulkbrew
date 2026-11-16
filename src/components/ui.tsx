@@ -60,14 +60,14 @@ export function Chip({ pressed, onClick, children, title }: { pressed: boolean; 
   );
 }
 
-export function Progress({ value, max, label }: { value: number; max: number; label?: string }) {
+export function Progress({ value, max, label, percent = false }: { value: number; max: number; label?: string; percent?: boolean }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
     <div>
       {label && (
         <div className="mb-2 flex justify-between text-[16px] text-cream-dim">
           <span>{label}</span>
-          <span>{value}/{max}</span>
+          <span>{percent ? `${pct}%` : `${value}/${max}`}</span>
         </div>
       )}
       <div className="px-progress px-border" role="progressbar" aria-valuenow={value} aria-valuemax={max}>

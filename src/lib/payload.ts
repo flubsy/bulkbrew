@@ -81,3 +81,48 @@ export async function postJson<T = unknown>(url: string, body: unknown): Promise
   if (!res.ok) throw new Error((data as { error?: string })?.error ?? `HTTP ${res.status}`);
   return data as T;
 }
+
+/**
+ * Like postJson, but for routes that stream progress (header X-Progress: 1, one JSON object per
+ * line): calls onProgress for each { type: "progress" } line and resolves with the final "done"
+ * object. Falls back to plain JSON if the server answers that way (e.g. an error status).
+ */
+export async function postJsonWithProgress<T = unknown>(url: string, body: unknown, onProgress: (pct: number, label: string) => void): Promise<T> {
+  const json = JSON.stringify(body);
+  const headers: Record<string, string> = { "Content-Type": "application/json", "X-Progress": "1" };
+  let payload: BodyInit = json;
+  if (json.length > 50_000 && typeof CompressionStream !== "undefined") {
+    payload = await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+    headers["Content-Type"] = "application/octet-stream";
+    headers["X-Body-Encoding"] = "gzip";
+  }
+  const res = await fetch(url, { method: "POST", headers, body: payload });
+  if (!res.ok || !res.body || !(res.headers.get("content-type") ?? "").includes("ndjson")) {
+    const text = await res.text();
+    let data: unknown;
+    try { data = JSON.parse(text); } catch {
+      if (res.status === 413) throw new Error("Your collection is too large to send in one go. Try a narrower build (pick a commander or colours first) and tell the developer.");
+      if (res.status === 504) throw new Error("The server took too long. Try again; the second run is faster because EDHREC data is cached.");
+      throw new Error(`Server error ${res.status}: ${text.slice(0, 120)}`);
+    }
+    if (!res.ok) throw new Error((data as { error?: string })?.error ?? `HTTP ${res.status}`);
+    return data as T;
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (value) buf += value;
+    let nl: number;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line) continue;
+      const msg = JSON.parse(line) as { type: string; pct?: number; label?: string; error?: string };
+      if (msg.type === "progress") onProgress(msg.pct ?? 0, msg.label ?? "");
+      else if (msg.type === "error") throw new Error(msg.error ?? "Build failed");
+      else if (msg.type === "done") return msg as T;
+    }
+    if (done) throw new Error("The build stopped before it finished. Try again.");
+  }
+}

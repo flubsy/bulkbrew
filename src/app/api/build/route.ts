@@ -17,7 +17,14 @@ interface BuildRequest {
   refs: ReferenceDeck[];
 }
 
-/** POST BuildRequest → { deck: BuiltDeck, aiAvailable: boolean } */
+type Step = (pct: number, label: string) => void;
+
+/**
+ * POST BuildRequest → { deck: BuiltDeck, aiAvailable: boolean }
+ * With the header `X-Progress: 1` the answer streams instead, one JSON object per line:
+ * { type: "progress", pct, label } while it works, then { type: "done", deck, aiAvailable }
+ * (or { type: "error", error }). The Build page uses that for its progress bar.
+ */
 export async function POST(req: Request) {
   let body: BuildRequest;
   try {
@@ -28,12 +35,34 @@ export async function POST(req: Request) {
   if (!body?.options || !Array.isArray(body.owned)) return Response.json({ error: "Missing options or collection." }, { status: 400 });
   if (!body.owned.length) return Response.json({ error: "Your collection is empty. Import it first." }, { status: 400 });
 
+  if (req.headers.get("x-progress") !== "1") return Response.json(await buildDeck(body, () => {}));
+
+  const enc = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (o: unknown) => controller.enqueue(enc.encode(JSON.stringify(o) + "\n"));
+      try {
+        const result = await buildDeck(body, (pct, label) => send({ type: "progress", pct, label }));
+        send({ type: "done", ...result });
+      } catch (e) {
+        send({ type: "error", error: e instanceof Error ? e.message : "Build failed" });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, { headers: { "Content-Type": "application/x-ndjson", "Cache-Control": "no-store" } });
+}
+
+async function buildDeck(body: BuildRequest, step: Step) {
+  step(3, "Reading your collection");
   const pool = buildPool(body.owned);
   const refs = body.refs ?? [];
   const opts = body.options;
 
   const cmdCards = [opts.commander, opts.partner].filter(Boolean).map((n) => pool.find((p) => p.card.name.toLowerCase() === n!.toLowerCase())?.card).filter((c) => !!c);
   const ci = cmdCards.length ? [...new Set(cmdCards.flatMap((c) => c!.colorIdentity))] : opts.colors;
+  step(10, "Pulling EDHREC data and real decklists for your commander");
   // EDHREC data and real decklists for "decks like yours", fetched side by side.
   const [edBase, samples] = await Promise.all([
     edhrecContextFor(opts, { ci, commanderReleased: cmdCards[0]?.releasedAt }),
@@ -41,9 +70,11 @@ export async function POST(req: Request) {
   ]);
   // A copy: edhrecContextFor can return a shared empty object, which must never be modified.
   const ed = samples?.decks.length ? { ...edBase, sampleDecks: samples.decks, sampleSources: samples.sources } : edBase;
+  step(35, "Scoring your collection and filling the deck");
   let deck = buildHeuristic(pool, opts, refs, ed);
   if (opts.useEdhrec && !ed.cards.length) deck.warnings.push("EDHREC returned nothing for this commander/theme (or was unreachable). Built without it.");
 
+  step(55, "Looking for combos you can complete from your collection");
   // Extra ways to win: combos the list is one or two owned cards away from (pieces on the bench).
   // Brackets 1–2 allow no combos; bracket 3 no early two-card ones (see the filter below); 4–5 anything.
   const bracket = opts.bracket ?? 3;
@@ -105,6 +136,7 @@ export async function POST(req: Request) {
     } catch { /* Spellbook unreachable: keep the first build */ }
   }
 
+  if (opts.useAI) step(70, "Asking Claude to refine the list");
   if (opts.useAI) {
     if (!aiAvailable()) {
       deck.warnings.push("AI pass skipped: AI is off on this server (no ANTHROPIC_API_KEY, or DECKBIT_DISABLE_AI is set).");
@@ -119,6 +151,7 @@ export async function POST(req: Request) {
     }
   }
 
+  step(80, "Checking combos and the bracket with Commander Spellbook");
   // Combos actually in the finished list (Commander Spellbook).
   if (deck.commanders.length) {
     const combos = await findCombos(deck.commanders.map((c) => c.name), deck.cards.filter((c) => c.role !== "land").map((c) => c.name));
@@ -129,6 +162,8 @@ export async function POST(req: Request) {
 
   await applyBracketEstimate(deck);
   deck.stats.power = ratePower(deck, { combos: deck.combos });
+  step(95, "Writing the primer");
   deck.primer = buildPrimer(deck, cmdCards.filter((c): c is NonNullable<typeof c> => !!c), ed.tagLabel, pool.map((p) => p.card));
-  return Response.json({ deck: withImages(deck), aiAvailable: aiAvailable() });
+  step(100, "Done");
+  return { deck: withImages(deck), aiAvailable: aiAvailable() };
 }

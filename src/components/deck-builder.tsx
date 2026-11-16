@@ -5,13 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 import { creatureTypes } from "@/lib/builder/classify";
 import { PAIR_LABEL, pairKinds, partnerOptions, suggestCommanders } from "@/lib/builder/commanders";
 import { db } from "@/lib/db";
-import { packCollection, postJson } from "@/lib/payload";
+import { packCollection, postJsonWithProgress } from "@/lib/payload";
 import { BRACKETS, COLOR_COMBOS, FORMATS, THEMES, comboName, type BuildOptions, type BuiltDeck, type Color } from "@/lib/types";
 import { CardPreviewProvider } from "./card-preview";
 import { CommanderPicker } from "./commander-picker";
 import { DeckView } from "./deck-view";
 import { ManaSymbol } from "./mana";
-import { Button, Chip, Disclosure, Input, Label, Notice, Panel, Select, TextArea } from "./ui";
+import { Button, Chip, Disclosure, Input, Label, Notice, Panel, Progress, Select, TextArea } from "./ui";
+import { CompositionSliders } from "./composition-sliders";
 import { useCurrency } from "./currency-provider";
 import { ReserveSelect } from "./reserve-select";
 import { reservedCounts, useReserveMode, withoutReserved } from "@/lib/reserve";
@@ -49,6 +50,9 @@ function DeckBuilderInner() {
   const [include, setInclude] = useState("");
   const [exclude, setExclude] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ pct: number; label: string } | null>(null);
+  // After a build the options fold away so the deck gets the full width; "change options" brings them back.
+  const [showOptions, setShowOptions] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deck, setDeck] = useState<BuiltDeck | null>(null);
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
@@ -133,17 +137,25 @@ function DeckBuilderInner() {
       bracket: base.format === "commander" ? base.bracket : undefined,
     };
     const selectedRefs = (refs ?? []).filter((r) => options.referenceDeckIds.includes(r.id));
-    setBusy(options.useAI ? "Scoring your collection, pulling EDHREC, then asking Claude to tune the list… (30–120s)" : "Scoring your collection against EDHREC and checking combos…");
+    setBusy("Building");
+    setProgress({ pct: 1, label: "Packing up your collection" });
     try {
-      const json = await postJson<{ deck: BuiltDeck; aiAvailable: boolean }>("/api/build", { options, owned: packCollection(withoutReserved(enriched, reservedCounts(await db.builds.toArray(), reserveMode)), options.format), refs: selectedRefs });
+      const json = await postJsonWithProgress<{ deck: BuiltDeck; aiAvailable: boolean }>(
+        "/api/build",
+        { options, owned: packCollection(withoutReserved(enriched, reservedCounts(await db.builds.toArray(), reserveMode)), options.format), refs: selectedRefs },
+        (pct, label) => setProgress({ pct, label }),
+      );
       const built: BuiltDeck = json.deck;
       setAiAvailable(json.aiAvailable);
       setDeck(built);
+      setShowOptions(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
       await db.builds.put(built);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Build failed");
     } finally {
       setBusy(null);
+      setProgress(null);
     }
   }
 
@@ -157,10 +169,27 @@ function DeckBuilderInner() {
     );
   }
 
+  const optionsHidden = !!deck && !showOptions;
+  const commanderLine = [opts.commander, opts.partner].filter(Boolean).join(" + ");
   return (
-    <div className="mt-8 grid gap-6 lg:grid-cols-[420px_1fr]">
+    <div className={`mt-8 grid gap-6 ${optionsHidden ? "" : "lg:grid-cols-[420px_1fr]"}`}>
+      {optionsHidden && (
+        <div className="px-border flex flex-wrap items-center gap-3 bg-navy-900 px-4 py-3">
+          <span className="text-[17px] text-cream-dim">
+            Built {commanderLine || FORMATS.find((f) => f.id === opts.format)?.label}
+            {opts.bracket ? ` · bracket ${opts.bracket}` : ""}
+            {opts.themes.length ? ` · ${opts.themes.join(", ")}` : ""}
+          </span>
+          <span className="ml-auto flex gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setShowOptions(true)}>change options</Button>
+            <Button size="sm" onClick={() => build()} disabled={!!busy}>{busy ? "building…" : "rebuild"}</Button>
+          </span>
+          {busy && progress && <div className="w-full"><Progress value={progress.pct} max={100} label={progress.label} percent /></div>}
+          {error && <div className="w-full"><Notice tone="error">{error}</Notice></div>}
+        </div>
+      )}
       {/* ---------------- Options ---------------- */}
-      <div className="grid content-start gap-4">
+      <div className={`grid content-start gap-4 ${optionsHidden ? "hidden" : ""}`}>
         <Panel title="Format">
           <Select value={opts.format} onChange={(e) => setOpts((o) => ({ ...o, format: e.target.value as BuildOptions["format"], commander: undefined, partner: undefined }))} aria-label="Format">
             {FORMATS.map((f) => (
@@ -257,6 +286,8 @@ function DeckBuilderInner() {
           <div className="mt-4"><ReserveSelect mode={reserveMode} onChange={setReserveMode} /></div>
         </Panel>
 
+        <CompositionSliders opts={opts} setOpts={setOpts} />
+
         <Disclosure summary="Filters" aside={<span className="text-[15px] text-muted">{summarise(opts, refs?.length ?? 0)}</span>}>
           <Label hint={opts.allowedSets?.length ? `${opts.allowedSets.length} selected` : "any set"}>Only use cards from these sets</Label>
           <Input placeholder="Search sets…" value={setQuery} onChange={(e) => setSetQuery(e.target.value)} aria-label="Search sets" />
@@ -325,7 +356,12 @@ function DeckBuilderInner() {
         <Button onClick={() => build()} disabled={!!busy}>
           {busy ? "Building…" : "Build deck"}
         </Button>
-        {busy && <Notice>{busy}</Notice>}
+        {busy && progress && (
+          <div className="px-border bg-navy-900 p-4" role="status" aria-live="polite">
+            <Progress value={progress.pct} max={100} label={progress.label} percent />
+            {opts.useAI && <p className="mt-2 text-[14px] text-muted">The Claude pass can take a minute or two.</p>}
+          </div>
+        )}
         {error && <Notice tone="error">{error}</Notice>}
       </div>
 

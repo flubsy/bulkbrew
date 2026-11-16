@@ -238,14 +238,17 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
             <p className="text-[15px] text-muted">Stats, power, combos and the primer update when you save.</p>
           </div>
         )}
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_260px]">
+        {/* Container queries: the layout follows the space the deck view has (full page on Saved,
+            beside the options on Build), not the screen width. */}
+        <div className="@container">
+        <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_260px]">
           <div>
             {focusRole && (
               <p className="mb-3 text-[15px] text-cream-dim">
                 Highlighting <span className="text-orange">{ROLE_LABEL[focusRole]}</span> cards. <button type="button" className="text-orange underline" onClick={() => setFocusRole(null)}>clear</button>
               </p>
             )}
-            <div className="gap-6 md:columns-2">
+            <div className="gap-6 @2xl:columns-2">
               {deck.commanders.length > 0 && <Group label="Commander" cards={deck.commanders} />}
               {shownGroups.map((g) => (
                 <Group key={g.key} label={g.label} cards={g.cards} action={editing ? "remove" : undefined} />
@@ -257,6 +260,7 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
         </p>
           </div>
           <DeckSidebar />
+        </div>
         </div>
       </Panel>
 
@@ -388,7 +392,7 @@ export function DeckView({ deck, onChange, readOnly = false }: { deck: BuiltDeck
 
   function DeckSidebar() {
     return (
-      <aside className="grid content-start gap-5 sm:grid-cols-2 xl:sticky xl:top-24 xl:grid-cols-1 xl:self-start">
+      <aside className="grid content-start gap-5 @xl:grid-cols-2 @4xl:sticky @4xl:top-24 @4xl:grid-cols-1 @4xl:self-start">
         <section>
           <h3 className="font-pixel mb-2 text-[12px] text-orange">Mana curve</h3>
           <div className="flex h-24 items-end gap-1">
