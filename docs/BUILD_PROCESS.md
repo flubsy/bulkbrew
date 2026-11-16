@@ -48,6 +48,19 @@
      | +1/+1 counter payoffs | 8+ cards that place counters |
      | Artifact payoffs | 15+ artifacts or artifact-token makers |
      | Enchantment payoffs | 12+ enchantments |
+   - **Finishers** (`finisherKind` in `classify.ts`) are grouped by how they win: overrun, drain, burn, alternate win, poison, extra combat, mill, draw-trigger damage, big threat.
+     - A finisher whose kind matches your themes scores +2.5. One with no link to the deck (no theme, commander hook, tribe or EDHREC data) scores −3.
+     - The finisher slots prefer different kinds: each pick counts 2.5 less for a second card of the same kind.
+     - Draw-trigger finishers like Psychosis Crawler are also a dead-weight need: they're only kept with 12+ draw engines.
+   - **Synergy pass** (`synergyWith` in `needs.ts`). Once the list exists, up to 8 swaps bring in bench cards that link up with what's actually in it: token makers beside token payoffs, fodder beside sacrifice outlets, spells beside spell payoffs, and so on.
+     - Scoring: half a point per payoff a card supplies, and half a point per supplier a payoff gets, capped at 5.
+     - A swap needs a net gain of 1.5 or more.
+     - Ramp, draw, removal, wipes, counterspells, tutors, protection, recursion and finishers only swap like for like. Creatures, utility and synergy cards are flexible slots and can swap with each other.
+     - Must-includes, combo pieces and lands never move.
+   - **Combo pass** (`api/build`, after the first build). Commander Spellbook is given the list plus your 300 best eligible bench cards.
+     - Up to 2 combos one or two owned cards away are completed (1 at bracket 3), then the deck is rebuilt around them.
+     - Bracket 3 allows 3+ card combos, and 2-card ones whose pieces cost 6+ mana and aren't rated "Ruthless". Brackets 1–2 get none.
+     - A note lists what was added and what was cut to make room.
 5. **Mana base.** Nonbasic lands are scored for the colours you actually use. Basics are split by colour-pip share.
 6. **Check.**
    - Power rating (`builder/power.ts`): curve, ramp and fast mana, tutors, interaction, draw, game changers, staple density, finishers and synergy.

@@ -1,7 +1,7 @@
 import { BASIC_LANDS, isBasic, manaPips } from "../scryfall";
 import { FORMATS, THEMES, type BuildOptions, type BuiltDeck, type CardData, type Color, type DeckEntry, type DeckProfile, type EdhrecCard, type ReferenceDeck, type Role, type TrendFlag } from "../types";
-import { commanderHooks, creatureTypes, isCreature, isExtraTurn, isFastMana, isGameChanger, isLand, isMassLandDenial, themeScore } from "./classify";
-import { unmetNeed } from "./needs";
+import { commanderHooks, creatureTypes, FINISHER_LABEL, FINISHER_THEMES, finisherKind, type FinisherKind, isCreature, isExtraTurn, isFastMana, isGameChanger, isLand, isMassLandDenial, themeScore } from "./classify";
+import { needCounts, synergyWith, unmetNeed } from "./needs";
 import { ratePower } from "./power";
 import { classifyCard } from "./roles";
 
@@ -38,6 +38,8 @@ export interface CardFacts {
   /** New or rising card (see trendFlag). */
   trend?: TrendFlag;
   roleSource: "tag" | "text";
+  /** For finishers: how it wins, and whether that fits this deck's plan. */
+  finisher?: { kind: FinisherKind; fits: boolean };
 }
 
 /** A card in the owned pool: one entry per unique name, quantity summed across printings. */
@@ -289,6 +291,20 @@ export function makeScorer(opts: BuildOptions, refs: ReferenceDeck[], commanders
       reasons.push("EDHREC average deck");
     }
 
+    // Finishers: reward ones that fit the plan (theme, commander, EDHREC for this commander), and
+    // mark down generic ones with no link to the deck, so the same colourless win-con doesn't
+    // land in every list.
+    if (role === "finisher") {
+      const kind = finisherKind(c);
+      if (kind) {
+        const themeFit = FINISHER_THEMES[kind].some((t) => opts.themes.includes(t));
+        const fits = themeFit || facts.hooks.length > 0 || !!facts.edhrec || facts.inAverageDeck || !!facts.tribe;
+        facts.finisher = { kind, fits };
+        if (themeFit) { score += 2.5; reasons.push(`${FINISHER_LABEL[kind]} finisher for your theme`); }
+        else if (!fits) score -= 3;
+      }
+    }
+
     // Role usefulness baseline (so interaction isn't crowded out by theme cards).
     const roleBonus: Partial<Record<Role, number>> = { ramp: 2, draw: 2, removal: 2, wipe: 1, counter: 1.5, tutor: 1.5, protection: 1, recursion: 0.5, finisher: 1.5 };
     score += roleBonus[role] ?? 0;
@@ -357,6 +373,7 @@ export function describe(c: Candidate, ed: EdhrecContext = EMPTY_EDHREC): string
   if (f.trend === "hot") bits.push("new card already doing well here");
   else if (f.trend === "trending") bits.push("trending on EDHREC");
   else if (f.trend === "new") bits.push("new card");
+  if (f.finisher) bits.push(`${FINISHER_LABEL[f.finisher.kind]} finisher`);
   if (f.adjustedInclusion !== undefined) bits.push(`newer card: ~${Math.round(f.adjustedInclusion * 100)}% of decks built since it came out`);
   if (f.inAverageDeck && !f.edhrec) bits.push("in EDHREC's average deck");
   if (f.archetype && (f.archetype.synergy ?? 0) >= 0.08 && ed.archetypeLabel) bits.push(`strong in ${ed.archetypeLabel} decks generally (+${Math.round((f.archetype.synergy ?? 0) * 100)}% synergy)`);
@@ -536,6 +553,26 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
   const nonLandRoles = (Object.keys(q) as Role[]).filter((r) => r !== "land");
   for (const role of nonLandRoles) {
     const want = q[role] ?? 0;
+    if (role === "finisher") {
+      // Different ways to win beat three of the same: each pick counts 2.5 less for a second
+      // finisher of the same kind (two overruns, two drains…).
+      const kinds: Record<string, number> = {};
+      for (const e of picked) { const k = byName.get(e.name)?.facts.finisher?.kind; if (k) kinds[k] = (kinds[k] ?? 0) + 1; }
+      while ((roleCount.finisher ?? 0) < want && count() < nonLandTarget) {
+        let best: Candidate | null = null;
+        let bestScore = -Infinity;
+        for (const p of sorted) {
+          if (p.role !== "finisher" || pickedNames.has(p.card.name) || p.score <= -50) continue;
+          const k = p.facts.finisher?.kind;
+          const adj = p.score - (k ? (kinds[k] ?? 0) * 2.5 : 0);
+          if (adj > bestScore) { best = p; bestScore = adj; }
+        }
+        if (!best || !take(best, copiesFor(best), "finisher slot")) break;
+        const k = best.facts.finisher?.kind;
+        if (k) kinds[k] = (kinds[k] ?? 0) + 1;
+      }
+      continue;
+    }
     for (const p of sorted) {
       if ((roleCount[role] ?? 0) >= want || count() >= nonLandTarget) break;
       if (p.role !== role) continue;
@@ -580,6 +617,15 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
   const deckCards = () => picked.map((e) => byName.get(e.name)?.card).filter((c): c is CardData => !!c);
   const supported = (p: Candidate) => !unmetNeed(p.card, [...deckCards(), p.card], commanders);
   const cuts: string[] = [];
+  // Take a card back out (pickedNames keeps it, so it isn't picked again).
+  const drop = (e: DeckEntry, c: Candidate) => {
+    picked.splice(picked.indexOf(e), 1);
+    roleCount[c.role] = (roleCount[c.role] ?? 0) - e.quantity;
+    spend -= (c.priceUsd ?? 0) * e.quantity;
+    if (c.flagged.includes("game changer")) gcUsed--;
+    const bucket = Math.min(6, Math.floor(c.card.cmc));
+    cmcCount[bucket] = (cmcCount[bucket] ?? 0) - e.quantity;
+  };
   for (let round = 0; round < 3; round++) {
     const cards = deckCards();
     const dead = picked
@@ -589,12 +635,7 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
       .filter((x) => x.why);
     if (!dead.length) break;
     for (const { e, c, why } of dead) {
-      picked.splice(picked.indexOf(e), 1);
-      roleCount[c.role] = (roleCount[c.role] ?? 0) - e.quantity;
-      spend -= (c.priceUsd ?? 0) * e.quantity;
-      if (c.flagged.includes("game changer")) gcUsed--;
-      const bucket = Math.min(6, Math.floor(c.card.cmc));
-      cmcCount[bucket] = (cmcCount[bucket] ?? 0) - e.quantity; // pickedNames keeps it, so it isn't picked again
+      drop(e, c);
       cuts.push(why!);
       const same = sorted.find((p) => p.role === c.role && !pickedNames.has(p.card.name) && supported(p) && canAfford(p) && p.score > -50);
       if (same && take(same, copiesFor(same), `${c.role} slot`)) {
@@ -605,6 +646,48 @@ export function buildHeuristic(pool: PoolCard[], opts: BuildOptions, refs: Refer
     fillRest(supported);
   }
   if (cuts.length) notes.push(`Left out ${cuts.length} card${cuts.length === 1 ? "" : "s"} this list can't use well: ${cuts.join("; ")}.`);
+
+  // 3c. Synergy pass. Now the list exists, cards are judged by what's actually in it: token makers
+  // next to token payoffs, fodder next to sacrifice outlets, spells next to spell payoffs, and so on
+  // (see builder/needs.ts). Up to 8 same-role swaps where a bench card links up with clearly more
+  // of the deck than the card it replaces. Must-includes, combo pieces and lands never move;
+  // ramp/draw/removal-type slots only swap like for like, so role counts stay put.
+  const synergySwaps: string[] = [];
+  const FLEX_ROLES = new Set<Role>(["creature", "utility", "synergy"]);
+  const synBench = sorted.filter((p) => p.role !== "land" && p.score > -50).slice(0, 300 + picked.length);
+  for (let i = 0; i < 8; i++) {
+    const counts = needCounts(deckCards(), commanders);
+    const deckSyn = new Map(picked.map((e) => { const c = byName.get(e.name); return [e.name, c ? synergyWith(c.card, counts, true).score : 0] as const; }));
+    let best: { inC: Candidate; out: DeckEntry; outC: Candidate; gain: number; why: string } | null = null;
+    for (const p of synBench) {
+      if (pickedNames.has(p.card.name) || !canAfford(p)) continue;
+      if (p.flagged.includes("game changer") && gcUsed >= gcCap) continue;
+      const syn = synergyWith(p.card, counts);
+      if (syn.score < 2 || !supported(p)) continue;
+      for (const e of picked) {
+        const c = byName.get(e.name);
+        if (!c || c.reasons[0] === "must include" || e.reason.startsWith("Combo piece")) continue;
+        // Quota roles (ramp, draw, removal…) swap like for like; creatures, utility and synergy
+        // cards are the flexible slots and can swap with each other.
+        if (c.role !== p.role && !(FLEX_ROLES.has(c.role) && FLEX_ROLES.has(p.role))) continue;
+        const gain = p.score + syn.score - (c.score + (deckSyn.get(e.name) ?? 0));
+        if (gain >= 1.5 && (!best || gain > best.gain)) best = { inC: p, out: e, outC: c, gain, why: syn.why };
+      }
+    }
+    if (!best) break;
+    drop(best.out, best.outC);
+    if (!take(best.inC, copiesFor(best.inC), "synergy")) {
+      pickedNames.delete(best.outC.card.name); // put the original back
+      take(best.outC, best.out.quantity, best.out.reason);
+      break;
+    }
+    const b = Math.min(6, Math.floor(best.inC.card.cmc));
+    cmcCount[b] = (cmcCount[b] ?? 0) + copiesFor(best.inC);
+    const entry = picked[picked.length - 1];
+    entry.reason = `${entry.reason} · synergy: ${best.why}`;
+    synergySwaps.push(`${best.out.name} → ${best.inC.card.name} (${best.why})`);
+  }
+  if (synergySwaps.length) notes.push(`Synergy pass: ${synergySwaps.join("; ")}.`);
 
   const nonLandsPicked = count();
   if (nonLandsPicked < nonLandTarget) warnings.push(`Only ${nonLandsPicked} eligible non-land cards found for ${nonLandTarget} slots — the collection is thin for this build. Loosen the filters or add cards.`);

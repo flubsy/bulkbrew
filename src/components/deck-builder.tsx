@@ -3,10 +3,10 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
 import { creatureTypes } from "@/lib/builder/classify";
-import { suggestCommanders } from "@/lib/builder/commanders";
+import { PAIR_LABEL, pairKinds, partnerOptions, suggestCommanders } from "@/lib/builder/commanders";
 import { db } from "@/lib/db";
 import { packCollection, postJson } from "@/lib/payload";
-import { BRACKETS, COLOR_COMBOS, FORMATS, THEMES, type BuildOptions, type BuiltDeck, type Color } from "@/lib/types";
+import { BRACKETS, COLOR_COMBOS, FORMATS, THEMES, comboName, type BuildOptions, type BuiltDeck, type Color } from "@/lib/types";
 import { CardPreviewProvider } from "./card-preview";
 import { CommanderPicker } from "./commander-picker";
 import { DeckView } from "./deck-view";
@@ -108,12 +108,10 @@ function DeckBuilderInner() {
   }, [sets, setQuery]);
 
   const selectedCommander = commanders.find((c) => c.name === opts.commander);
-  const partnerable = useMemo(() => {
-    if (!selectedCommander) return [];
-    const self = cards.find((c) => c.name === selectedCommander.name);
-    if (!self || !/partner|friends forever|choose a background|doctor's companion/i.test(self.oracleText)) return [];
-    return commanders.filter((c) => c.name !== selectedCommander.name);
-  }, [selectedCommander, cards, commanders]);
+  // Second commander: only pairs the rules allow (Partner, Partner with, Friends forever, Backgrounds, Doctors).
+  const selfCard = useMemo(() => (selectedCommander ? cards.find((c) => c.name === selectedCommander.name) : undefined), [selectedCommander, cards]);
+  const pairing = useMemo(() => (selfCard ? pairKinds(selfCard) : []), [selfCard]);
+  const partnerable = useMemo(() => (selfCard ? partnerOptions(selfCard, cards, opts.format) : []), [selfCard, cards, opts.format]);
 
   const toggle = <K extends "themes" | "colors" | "allowedSets" | "referenceDeckIds">(key: K, v: string) =>
     setOpts((o) => {
@@ -199,14 +197,20 @@ function DeckBuilderInner() {
         {isEdh && (
           <>
             <CommanderPicker cards={cards} opts={opts} setOpts={setOpts} knownTypes={knownTypes} />
-            {partnerable.length > 0 && (
-              <Panel title="Partner / background">
-                <Select value={opts.partner ?? ""} onChange={(e) => setOpts((o) => ({ ...o, partner: e.target.value || undefined }))} aria-label="Partner">
-                  <option value="">none</option>
-                  {partnerable.map((c) => (
-                    <option key={c.name} value={c.name}>{c.name} · {c.combo}</option>
-                  ))}
-                </Select>
+            {pairing.length > 0 && (
+              <Panel tone="gold" title={pairing.some((k) => k.kind === "background") ? "Add a Background" : "Add a second commander"}>
+                <p className="mb-3 text-[15px] text-cream-dim">
+                  {opts.commander} has {pairing.map((k) => (k.kind === "partnerWith" ? `Partner with ${k.with}` : PAIR_LABEL[k.kind])).join(" and ")}
+                  {partnerable.length ? `: ${partnerable.length} ${partnerable.length === 1 ? "match" : "matches"} in your collection. The pair's combined colours set the deck's colour identity.` : ", but nothing in your collection pairs with it."}
+                </p>
+                {partnerable.length > 0 && (
+                  <Select value={opts.partner ?? ""} onChange={(e) => setOpts((o) => ({ ...o, partner: e.target.value || undefined, edhrecTag: undefined }))} aria-label="Second commander">
+                    <option value="">none, just {opts.commander}</option>
+                    {partnerable.map((c) => (
+                      <option key={c.name} value={c.name}>{c.name} · {comboName([...new Set([...(selfCard?.colorIdentity ?? []), ...c.colorIdentity])])}</option>
+                    ))}
+                  </Select>
+                )}
               </Panel>
             )}
           </>
